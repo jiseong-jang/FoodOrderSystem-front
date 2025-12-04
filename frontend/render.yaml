@@ -1,0 +1,12 @@
+services:
+  # 프론트엔드 서비스 (Static Site)
+  - type: static
+    name: mrdinner-frontend
+    buildCommand: npm install && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_VOICE_API_URL
+        sync: false
+
