@@ -62,49 +62,47 @@ WORKDIR /app/voice-order-fastapi
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 # application.yml 생성 (환경 변수로 대체되지만 기본 구조는 필요)
-RUN mkdir -p /app/backend/src/main/resources
-RUN cat > /app/backend/src/main/resources/application.yml << 'EOF'
-spring:
-  application:
-    name: mrdinner-backend
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/mrdinner?useSSL=false&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci}
-    username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:jisung727}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    defer-datasource-initialization: true
-    properties:
-      hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.MySQL8Dialect
-  sql:
-    init:
-      mode: never
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-    time-zone: Asia/Seoul
-server:
-  port: ${PORT:8080}
-  servlet:
-    context-path: /api
-    encoding:
-      charset: UTF-8
-      enabled: true
-      force: true
-jwt:
-  secret: ${JWT_SECRET:your_jwt_secret_key_here_minimum_32_characters_for_local_development}
-  expiration: ${JWT_EXPIRATION:86400000}
-logging:
-  level:
-    com.mrdinner: ${LOG_LEVEL:DEBUG}
-    org.springframework.security: ${SECURITY_LOG_LEVEL:DEBUG}
-    root: ${ROOT_LOG_LEVEL:INFO}
-EOF
+RUN mkdir -p /app/backend/src/main/resources && \
+    printf 'spring:\n\
+  application:\n\
+    name: mrdinner-backend\n\
+  datasource:\n\
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/mrdinner?useSSL=false&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci}\n\
+    username: ${SPRING_DATASOURCE_USERNAME:root}\n\
+    password: ${SPRING_DATASOURCE_PASSWORD:jisung727}\n\
+    driver-class-name: com.mysql.cj.jdbc.Driver\n\
+  jpa:\n\
+    hibernate:\n\
+      ddl-auto: update\n\
+    show-sql: true\n\
+    defer-datasource-initialization: true\n\
+    properties:\n\
+      hibernate:\n\
+        format_sql: true\n\
+        dialect: org.hibernate.dialect.MySQL8Dialect\n\
+  sql:\n\
+    init:\n\
+      mode: never\n\
+  jackson:\n\
+    serialization:\n\
+      write-dates-as-timestamps: false\n\
+    time-zone: Asia/Seoul\n\
+server:\n\
+  port: ${PORT:8080}\n\
+  servlet:\n\
+    context-path: /api\n\
+    encoding:\n\
+      charset: UTF-8\n\
+      enabled: true\n\
+      force: true\n\
+jwt:\n\
+  secret: ${JWT_SECRET:your_jwt_secret_key_here_minimum_32_characters_for_local_development}\n\
+  expiration: ${JWT_EXPIRATION:86400000}\n\
+logging:\n\
+  level:\n\
+    com.mrdinner: ${LOG_LEVEL:DEBUG}\n\
+    org.springframework.security: ${SECURITY_LOG_LEVEL:DEBUG}\n\
+    root: ${ROOT_LOG_LEVEL:INFO}\n' > /app/backend/src/main/resources/application.yml
 
 # Supervisor 설정
 RUN mkdir -p /var/log/supervisor
