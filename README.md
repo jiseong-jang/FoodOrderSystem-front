@@ -231,12 +231,131 @@ npm run dev
 
 ## 배포 가이드
 
-이 프로젝트는 무료로 배포할 수 있도록 설정되어 있습니다. 다음 플랫폼을 사용합니다:
+이 프로젝트는 **완전 무료**로 배포할 수 있도록 설정되어 있습니다. 두 가지 배포 방법을 제공합니다:
 
-- **프론트엔드**: Vercel (무료, 빠른 CDN)
+### 배포 방법 선택
+
+#### 방법 1: Docker 단일 컨테이너 배포 (추천) 🐳
+- **하나의 서비스로 전체 애플리케이션 배포** (프론트엔드 + 백엔드 + 음성인식 API)
+- **Render에서 Docker 사용** - 가장 간단하고 빠름
+- **단일 URL로 모든 서비스 접근** - Nginx 리버스 프록시 사용
+
+#### 방법 2: 개별 서비스 배포
+- **프론트엔드**: Vercel (완전 무료, 빠른 CDN, 무제한 배포)
 - **백엔드**: Render Web Service (무료 티어) - Spring Boot
 - **음성인식 API**: Render Web Service (무료 티어) - FastAPI
 - **데이터베이스**: PlanetScale MySQL (무료 티어) 또는 다른 무료 MySQL 서비스
+
+---
+
+## 🐳 Docker 단일 컨테이너 배포 (Render)
+
+### 장점
+- ✅ **간단함**: 하나의 서비스만 배포하면 됨
+- ✅ **빠른 설정**: render.yaml 파일만 사용
+- ✅ **단일 URL**: 모든 서비스가 같은 도메인에서 동작
+- ✅ **비용 절감**: 하나의 서비스만 무료 티어 사용
+
+### 사전 준비
+
+1. **GitHub 저장소에 코드 푸시**
+   ```bash
+   git add .
+   git commit -m "Add Docker configuration"
+   git push origin main
+   ```
+
+2. **PlanetScale 데이터베이스 생성**
+   - [PlanetScale](https://planetscale.com/)에서 무료 계정 생성
+   - 새 데이터베이스 생성
+   - 연결 정보 확인 (Host, Username, Password, Database name)
+
+### Render 배포 단계
+
+1. **Render 대시보드 접속**
+   - [Render](https://render.com/)에 로그인 (GitHub 계정 연동)
+
+2. **새 Web Service 생성**
+   - "New" → "Web Service" 선택
+   - GitHub 저장소 연결
+   - **중요**: "Docker" 옵션 선택 (또는 render.yaml 파일이 있으면 자동 인식)
+
+3. **서비스 설정**
+   - **Name**: `mrdinner-all-in-one`
+   - **Environment**: `Docker` (또는 `Dockerfile` 선택)
+   - **Dockerfile Path**: `./Dockerfile` (기본값)
+   - **Docker Context**: `.` (프로젝트 루트)
+
+4. **환경 변수 설정**
+   Render 대시보드의 "Environment" 탭에서 다음 변수들을 추가:
+
+   ```env
+   # 데이터베이스 (PlanetScale)
+   SPRING_DATASOURCE_URL=jdbc:mysql://[HOST]:3306/[DATABASE]?useSSL=true&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
+   SPRING_DATASOURCE_USERNAME=[USERNAME]
+   SPRING_DATASOURCE_PASSWORD=[PASSWORD]
+   
+   # JWT
+   JWT_SECRET=[최소 32자 이상의 랜덤 문자열]
+   
+   # 프론트엔드 URL (배포 후 Render에서 제공하는 URL로 변경)
+   FRONTEND_URL=https://your-service.onrender.com
+   
+   # 음성 인식 API 설정
+   VOICE_ORDER_CLIENT_ORIGIN=https://your-service.onrender.com
+   VOICE_ORDER_MODEL_PRESET=openai
+   OPENAI_API_KEY=[OpenAI API 키]
+   VOICE_ORDER_CHAT_MODEL=gpt-4o-mini
+   
+   # Hugging Face 사용 시 (선택사항)
+   VOICE_ORDER_HF_ENDPOINT=https://router.huggingface.co/v1/chat/completions
+   VOICE_ORDER_HF_MODEL=meta-llama/Meta-Llama-3.1-8B-Instruct
+   VOICE_ORDER_HF_TOKEN=[Hugging Face 토큰]
+   ```
+
+   > **참고**: `PORT` 환경 변수는 Render가 자동으로 설정하므로 추가할 필요 없습니다.
+
+5. **배포 시작**
+   - "Create Web Service" 클릭
+   - 첫 빌드는 약 5-10분 소요 (의존성 다운로드 및 빌드)
+   - 배포 완료 후 Render가 제공하는 URL 확인 (예: `https://mrdinner-all-in-one.onrender.com`)
+
+6. **배포 후 확인**
+   - 프론트엔드: `https://your-service.onrender.com`
+   - 백엔드 API: `https://your-service.onrender.com/api`
+   - 음성 인식 API: `https://your-service.onrender.com/voice-api`
+
+### render.yaml 사용 (선택사항)
+
+프로젝트 루트에 `render.yaml` 파일이 있으면, Render 대시보드에서 "Apply render.yaml" 옵션을 사용하여 자동으로 서비스를 생성할 수 있습니다.
+
+---
+
+## 개별 서비스 배포 (방법 2)
+
+### 무료 티어 제한사항 및 대안
+
+#### Render 무료 티어
+- ✅ **무료**: 월 $0
+- ⚠️ **제한**: 15분간 요청이 없으면 서비스가 sleep 상태로 전환
+- ⚠️ **제한**: 첫 요청 시 깨어나는데 약 30초~1분 소요
+- 💡 **대안**: 
+  - [Railway](https://railway.app/) (월 $5 크레딧 무료, sleep 없음)
+  - [Fly.io](https://fly.io/) (무료 티어, sleep 없음)
+  - [Render 유료 플랜](https://render.com/pricing) ($7/월부터 sleep 없음)
+
+#### PlanetScale 무료 티어
+- ✅ **무료**: 월 $0
+- ⚠️ **제한**: 데이터베이스 크기 5GB
+- ⚠️ **제한**: 연결 수 제한
+- 💡 **대안**:
+  - [Supabase](https://supabase.com/) (PostgreSQL, 무료 티어, 500MB)
+  - [Neon](https://neon.tech/) (PostgreSQL, 무료 티어, 3GB)
+  - [Railway](https://railway.app/) (MySQL/PostgreSQL, 무료 크레딧)
+
+#### Vercel
+- ✅ **완전 무료**: 무제한 배포, 빠른 CDN
+- ✅ **제한 없음**: 개인 프로젝트는 무료로 충분
 
 ### 사전 준비
 
@@ -386,7 +505,10 @@ npm run dev
 1. **Render 무료 티어 제한**:
    - 15분간 요청이 없으면 서비스가 sleep 상태로 전환됩니다
    - 첫 요청 시 깨어나는데 약 30초~1분 정도 소요될 수 있습니다
-   - 프로덕션 환경에서는 유료 플랜을 고려하세요
+   - **해결 방법**: 
+     - [UptimeRobot](https://uptimerobot.com/) (무료)로 5분마다 헬스체크 요청
+     - [Cron-job.org](https://cron-job.org/) (무료)로 주기적 ping 설정
+     - 프로덕션 환경에서는 유료 플랜($7/월)을 고려하세요
 
 2. **PlanetScale 무료 티어 제한**:
    - 데이터베이스 크기 제한 (약 5GB)
@@ -396,6 +518,24 @@ npm run dev
 3. **환경 변수 보안**:
    - 민감한 정보(비밀번호, JWT 시크릿)는 절대 코드에 커밋하지 마세요
    - `.env` 파일은 `.gitignore`에 추가되어 있어야 합니다
+
+### 무료로 Sleep 방지하기
+
+Render 무료 티어의 sleep 문제를 해결하려면:
+
+1. **UptimeRobot 사용 (추천)**:
+   - [UptimeRobot](https://uptimerobot.com/) 가입 (무료)
+   - 새 Monitor 생성
+   - Type: HTTP(s)
+   - URL: `https://your-backend.onrender.com/api/menus`
+   - Interval: 5분
+   - 이렇게 하면 5분마다 요청이 가서 sleep 상태가 되지 않습니다
+
+2. **Cron-job.org 사용**:
+   - [Cron-job.org](https://cron-job.org/) 가입 (무료)
+   - 새 Job 생성
+   - URL: `https://your-backend.onrender.com/api/menus`
+   - Schedule: `*/5 * * * *` (5분마다)
 
 ### 문제 해결
 

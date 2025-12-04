@@ -1,10 +1,11 @@
 services:
   - type: web
-    name: mrdinner-backend
-    env: java
-    buildCommand: cd backend && mvn clean package -DskipTests
-    startCommand: cd backend && java -jar target/mrdinner-backend-1.0.0.jar
+    name: mrdinner-all-in-one
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
+      - key: PORT
+        sync: false
       - key: SPRING_DATASOURCE_URL
         sync: false
       - key: SPRING_DATASOURCE_USERNAME
@@ -15,18 +16,6 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-      - key: PORT
-        fromService:
-          type: web
-          name: mrdinner-backend
-          property: port
-
-  - type: web
-    name: mrdinner-voice-api
-    env: python
-    buildCommand: cd voice-order-fastapi && pip install -r requirements.txt
-    startCommand: cd voice-order-fastapi && uvicorn app.main:app --host 0.0.0.0 --port $PORT
-    envVars:
       - key: VOICE_ORDER_CLIENT_ORIGIN
         sync: false
       - key: VOICE_ORDER_MODEL_PRESET
@@ -41,9 +30,3 @@ services:
         sync: false
       - key: VOICE_ORDER_HF_TOKEN
         sync: false
-      - key: PORT
-        fromService:
-          type: web
-          name: mrdinner-voice-api
-          property: port
-
