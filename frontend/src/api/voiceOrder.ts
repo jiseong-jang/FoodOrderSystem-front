@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { ChatRequest, ChatResponse, ChatMessage, OrderConfirmRequest, OrderConfirmResponse, VoiceOrderSummary } from '../types'
+import { ChatRequest, ChatResponse, ChatMessage, OrderConfirmRequest, OrderConfirmResponse } from '../types'
 
 // FastAPI 서비스는 별도의 baseURL 사용
 const voiceApiClient: AxiosInstance = axios.create({

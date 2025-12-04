@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { UserRole } from './types'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -33,7 +34,7 @@ function App() {
               path="/cart"
               element={
                 <ProtectedRoute>
-                  <RoleRoute allowedRoles={['CUSTOMER']}>
+                  <RoleRoute allowedRoles={[UserRole.CUSTOMER]}>
                     <Cart />
                   </RoleRoute>
                 </ProtectedRoute>
@@ -43,7 +44,7 @@ function App() {
               path="/order"
               element={
                 <ProtectedRoute>
-                  <RoleRoute allowedRoles={['CUSTOMER']}>
+                  <RoleRoute allowedRoles={[UserRole.CUSTOMER]}>
                     <Order />
                   </RoleRoute>
                 </ProtectedRoute>
@@ -53,7 +54,7 @@ function App() {
               path="/orders"
               element={
                 <ProtectedRoute>
-                  <RoleRoute allowedRoles={['CUSTOMER']}>
+                  <RoleRoute allowedRoles={[UserRole.CUSTOMER]}>
                     <Orders />
                   </RoleRoute>
                 </ProtectedRoute>
@@ -63,7 +64,7 @@ function App() {
               path="/orders/:id"
               element={
                 <ProtectedRoute>
-                  <RoleRoute allowedRoles={['CUSTOMER']}>
+                  <RoleRoute allowedRoles={[UserRole.CUSTOMER]}>
                     <OrderDetail />
                   </RoleRoute>
                 </ProtectedRoute>
@@ -73,7 +74,7 @@ function App() {
               path="/profile"
               element={
                 <ProtectedRoute>
-                  <RoleRoute allowedRoles={['CUSTOMER']}>
+                  <RoleRoute allowedRoles={[UserRole.CUSTOMER]}>
                     <Profile />
                   </RoleRoute>
                 </ProtectedRoute>
@@ -83,7 +84,7 @@ function App() {
               path="/coupons"
               element={
                 <ProtectedRoute>
-                  <RoleRoute allowedRoles={['CUSTOMER']}>
+                  <RoleRoute allowedRoles={[UserRole.CUSTOMER]}>
                     <CouponWallet />
                   </RoleRoute>
                 </ProtectedRoute>
@@ -93,7 +94,7 @@ function App() {
               path="/kitchen"
               element={
                 <ProtectedRoute>
-                  <RoleRoute allowedRoles={['KITCHEN_STAFF']}>
+                  <RoleRoute allowedRoles={[UserRole.KITCHEN_STAFF]}>
                     <KitchenDashboard />
                   </RoleRoute>
                 </ProtectedRoute>
@@ -103,7 +104,7 @@ function App() {
               path="/delivery"
               element={
                 <ProtectedRoute>
-                  <RoleRoute allowedRoles={['DELIVERY_STAFF']}>
+                  <RoleRoute allowedRoles={[UserRole.DELIVERY_STAFF]}>
                     <DeliveryDashboard />
                   </RoleRoute>
                 </ProtectedRoute>

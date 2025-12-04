@@ -320,7 +320,7 @@ const KitchenDashboard = () => {
                 const reservationTime = order.reservationTime ? new Date(order.reservationTime) : null
                 const now = new Date()
                 const oneHourBefore = reservationTime ? new Date(reservationTime.getTime() - 60 * 60 * 1000) : null
-                const canCook = reservationTime && now >= oneHourBefore && now <= reservationTime
+                const canCook = reservationTime && oneHourBefore && now >= oneHourBefore && now <= reservationTime
                 
                 return (
                   <div key={order.orderId} style={{ border: '1px solid #ffc107', borderRadius: '8px', padding: '1.5rem', backgroundColor: '#fffbf0' }}>
@@ -348,7 +348,7 @@ const KitchenDashboard = () => {
                           조리 가능
                         </span>
                       )}
-                      {!canCook && reservationTime && now < oneHourBefore && (
+                      {!canCook && reservationTime && oneHourBefore && now < oneHourBefore && (
                         <span style={{ 
                           backgroundColor: '#6c757d', 
                           color: 'white', 

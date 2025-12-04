@@ -11,7 +11,7 @@ import ErrorMessage from '../components/ErrorMessage'
 const OrderDetail = () => {
   const { id } = useParams<{ id: string }>()
   const { currentOrder, loading, error, trackOrder, cancelOrder, updateOrder } = useOrderStore()
-  const { getMenuById, selectedMenu } = useMenuStore()
+  const {} = useMenuStore()
   const [isEditing, setIsEditing] = useState(false)
   const [editedQuantities, setEditedQuantities] = useState<Record<number, Record<string, number>>>({})
   const [updating, setUpdating] = useState(false)
@@ -250,7 +250,7 @@ const OrderDetail = () => {
       }
 
       // updateOrder가 최신 주문 정보를 반환하고 orderStore에서 currentOrder 업데이트
-      const updatedOrder = await updateOrder(currentOrder.orderId, updateRequest)
+      await updateOrder(currentOrder.orderId, updateRequest)
       
       // 편집 모드 즉시 종료하여 모든 편집 상태 초기화
       setIsEditing(false)
@@ -550,11 +550,11 @@ const OrderDetail = () => {
                   <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#555' }}>
                     {/* 편집 모드가 아닐 때는 최신 customizedQuantities만 표시 */}
                     {Object.entries(item.customizedQuantities || {})
-                      .filter(([, qty]): qty is number => typeof qty === 'number' && qty > 0)
+                      .filter(([, qty]) => typeof qty === 'number' && qty > 0)
                       .map(([code, qty], index) => (
                         <span key={code}>
                           {index > 0 && ', '}
-                          {getItemLabel(code)} x {qty}
+                          {getItemLabel(code)} x {qty as number}
                         </span>
                       ))}
                   </div>
@@ -688,10 +688,10 @@ const OrderDetail = () => {
                                   {Object.keys(prevQuantities).length > 0 ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                       {Object.entries(prevQuantities)
-                                        .filter(([, qty]): qty is number => typeof qty === 'number' && qty > 0)
+                                        .filter(([, qty]) => typeof qty === 'number' && qty > 0)
                                         .map(([code, qty]) => (
                                           <div key={code} style={{ color: '#1e293b' }}>
-                                            {getItemLabel(code)}: {qty}개
+                                            {getItemLabel(code)}: {qty as number}개
                                           </div>
                                         ))}
                                     </div>
@@ -707,10 +707,10 @@ const OrderDetail = () => {
                                   {Object.keys(newQuantities).length > 0 ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                       {Object.entries(newQuantities)
-                                        .filter(([, qty]): qty is number => typeof qty === 'number' && qty > 0)
+                                        .filter(([, qty]) => typeof qty === 'number' && qty > 0)
                                         .map(([code, qty]) => (
                                           <div key={code} style={{ color: '#1e293b' }}>
-                                            {getItemLabel(code)}: {qty}개
+                                            {getItemLabel(code)}: {qty as number}개
                                           </div>
                                         ))}
                                     </div>

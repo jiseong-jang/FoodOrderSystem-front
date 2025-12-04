@@ -3,14 +3,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMenuStore } from '../store/menuStore'
 import { useCartStore } from '../store/cartStore'
 import { useAuthStore } from '../store/authStore'
-import { MenuType, ChatMessage, VoiceOrderSummary, DeliveryType, CustomerCoupon } from '../types'
+import { MenuType, ChatMessage, VoiceOrderSummary, CustomerCoupon } from '../types'
 import { voiceOrderApi } from '../api/voiceOrder'
 import { customerApi } from '../api/customer'
 import { 
-  convertOrderSummaryToCartItemRequests,
-  parseDeliveryType,
-  parseReservationTime,
-  findCouponByCodeOrName
+  convertOrderSummaryToCartItemRequests
 } from '../utils/voiceOrderConverter'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -30,10 +27,10 @@ const MenuList = () => {
   const [isProcessing, setIsProcessing] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const [textInput, setTextInput] = useState('')
-  const [availableCoupons, setAvailableCoupons] = useState<CustomerCoupon[]>([])
   const [isServerConnected, setIsServerConnected] = useState<boolean | null>(null)
   const [customerName, setCustomerName] = useState<string>('')
-  const [hasInitialGreeting, setHasInitialGreeting] = useState(false)
+  const [_availableCoupons, setAvailableCoupons] = useState<CustomerCoupon[]>([])
+  const [_hasInitialGreeting, setHasInitialGreeting] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -106,24 +103,6 @@ const MenuList = () => {
     }
   }, [isVoiceMode, isAuthenticated])
 
-  // 고객 프로필 조회
-  const fetchCustomerProfile = async () => {
-    try {
-      const response = await customerApi.getProfile()
-      if (response.success && response.data) {
-        const name = response.data.name || '고객님'
-        setCustomerName(name)
-        return name
-      } else {
-        setCustomerName('고객님')
-        return '고객님'
-      }
-    } catch (err: any) {
-      console.error('고객 프로필 조회 실패:', err)
-      setCustomerName('고객님')
-      return '고객님'
-    }
-  }
 
   // FastAPI 서버 연결 확인
   const checkServerConnection = async () => {
@@ -412,7 +391,7 @@ const MenuList = () => {
   }
 
   // 주문 확정 처리
-  const handleOrderConfirmed = async (summary: VoiceOrderSummary, finalHistory: ChatMessage[]) => {
+  const handleOrderConfirmed = async (summary: VoiceOrderSummary, _finalHistory: ChatMessage[]) => {
     try {
       if (!isAuthenticated) {
         setVoiceError('로그인이 필요합니다.')
