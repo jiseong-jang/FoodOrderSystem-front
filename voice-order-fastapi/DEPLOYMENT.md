@@ -48,7 +48,7 @@
      - **Name**: `mrdinner-voice-api`
      - **Environment**: `Python 3`
      - **Build Command**: `pip install -r requirements.txt`
-     - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+     - **Start Command**: `python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`
      - **Root Directory**: (비워두기 - 루트가 voice-order-fastapi 폴더이므로)
 
 3. **환경 변수 설정** (위와 동일)
