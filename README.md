@@ -229,6 +229,195 @@ npm run dev
 - **일일 보충** (매일 자정): 와인(병) 5병, 샴페인 5병, 와인(잔) 10잔
 - **주간 보충** (월요일, 목요일 자정): 스테이크 15개, 커피 30개, 샐러드 10개, 에그 스크램블 10개, 베이컨 10개, 빵 10개, 바게트빵 20개, 커피포트 5개
 
+## 배포 가이드
+
+이 프로젝트는 무료로 배포할 수 있도록 설정되어 있습니다. 다음 플랫폼을 사용합니다:
+
+- **프론트엔드**: Vercel (무료, 빠른 CDN)
+- **백엔드**: Render Web Service (무료 티어) - Spring Boot
+- **음성인식 API**: Render Web Service (무료 티어) - FastAPI
+- **데이터베이스**: PlanetScale MySQL (무료 티어) 또는 다른 무료 MySQL 서비스
+
+### 사전 준비
+
+1. **GitHub 계정 및 저장소**
+   - 프로젝트를 GitHub에 푸시합니다
+   - 저장소를 Public 또는 Private으로 설정 (Vercel과 Render는 둘 다 지원)
+
+2. **PlanetScale 계정 생성**
+   - [PlanetScale](https://planetscale.com/)에서 무료 계정 생성
+   - 새 데이터베이스 생성 (MySQL 호환)
+   - 데이터베이스 연결 정보 확인 (호스트, 사용자명, 비밀번호, 포트)
+
+### 1단계: 데이터베이스 설정 (PlanetScale)
+
+1. PlanetScale 대시보드에서 데이터베이스 생성
+2. 데이터베이스 연결 정보 확인:
+   - Host
+   - Username
+   - Password
+   - Port (기본값: 3306)
+   - Database name
+
+### 2단계: 백엔드 배포 (Render)
+
+1. [Render](https://render.com/)에 로그인 (GitHub 계정으로 연동 가능)
+
+2. **새 Web Service 생성**:
+   - "New" → "Web Service" 선택
+   - GitHub 저장소 연결
+   - 다음 설정 입력:
+     - **Name**: `mrdinner-backend`
+     - **Environment**: `Java`
+     - **Build Command**: `cd backend && mvn clean package -DskipTests`
+     - **Start Command**: `cd backend && java -jar target/mrdinner-backend-1.0.0.jar`
+     - **Root Directory**: (비워두기)
+
+3. **환경 변수 설정**:
+   - Render 대시보드에서 "Environment" 탭으로 이동
+   - 다음 환경 변수 추가:
+     ```
+     SPRING_DATASOURCE_URL=jdbc:mysql://[PlanetScale 호스트]:3306/[데이터베이스명]?useSSL=true&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
+     SPRING_DATASOURCE_USERNAME=[PlanetScale 사용자명]
+     SPRING_DATASOURCE_PASSWORD=[PlanetScale 비밀번호]
+     JWT_SECRET=[32자 이상의 랜덤 문자열]
+     FRONTEND_URL=https://[Vercel 도메인].vercel.app
+     ```
+
+4. **배포 시작**:
+   - "Create Web Service" 클릭
+   - 배포가 완료되면 백엔드 URL 확인 (예: `https://mrdinner-backend.onrender.com`)
+
+### 2-1단계: 음성인식 API 배포 (Render)
+
+1. Render 대시보드에서 **새 Web Service 생성**:
+   - "New" → "Web Service" 선택
+   - 같은 GitHub 저장소 연결
+   - 다음 설정 입력:
+     - **Name**: `mrdinner-voice-api`
+     - **Environment**: `Python 3`
+     - **Build Command**: `cd voice-order-fastapi && pip install -r requirements.txt`
+     - **Start Command**: `cd voice-order-fastapi && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+     - **Root Directory**: (비워두기)
+
+2. **환경 변수 설정**:
+   - Render 대시보드에서 "Environment" 탭으로 이동
+   - 다음 환경 변수 추가:
+     ```
+     VOICE_ORDER_CLIENT_ORIGIN=https://[Vercel 도메인].vercel.app,http://localhost:3000
+     VOICE_ORDER_MODEL_PRESET=openai
+     OPENAI_API_KEY=[OpenAI API 키]
+     VOICE_ORDER_CHAT_MODEL=gpt-4o-mini
+     ```
+     > **참고**: `VOICE_ORDER_MODEL_PRESET`을 `hf_base` 또는 `hf_finetune`으로 설정하면 Hugging Face 모델을 사용할 수 있습니다. 이 경우 추가 환경 변수가 필요합니다.
+
+3. **배포 시작**:
+   - "Create Web Service" 클릭
+   - 배포가 완료되면 음성인식 API URL 확인 (예: `https://mrdinner-voice-api.onrender.com`)
+
+### 3단계: 프론트엔드 배포 (Vercel)
+
+1. [Vercel](https://vercel.com/)에 로그인 (GitHub 계정으로 연동 가능)
+
+2. **새 프로젝트 생성**:
+   - "Add New..." → "Project" 선택
+   - GitHub 저장소 선택
+   - 다음 설정 입력:
+     - **Framework Preset**: `Vite`
+     - **Root Directory**: `frontend`
+     - **Build Command**: `npm run build`
+     - **Output Directory**: `dist`
+     - **Install Command**: `npm install`
+
+3. **환경 변수 설정**:
+   - "Environment Variables" 섹션에서 다음 추가:
+     ```
+     VITE_API_URL=https://[Render 백엔드 URL]/api
+     VITE_VOICE_API_URL=https://[Render 음성인식 API URL]
+     ```
+     예: 
+     - `VITE_API_URL=https://mrdinner-backend.onrender.com/api`
+     - `VITE_VOICE_API_URL=https://mrdinner-voice-api.onrender.com`
+
+4. **배포 시작**:
+   - "Deploy" 클릭
+   - 배포가 완료되면 프론트엔드 URL 확인 (예: `https://mrdinner-frontend.vercel.app`)
+
+### 4단계: CORS 설정 업데이트
+
+프론트엔드 배포 후, Render 서비스들의 환경 변수를 업데이트합니다:
+
+1. **백엔드 CORS 설정**:
+   - Render 대시보드 → `mrdinner-backend` 서비스 → "Environment" 탭
+   - `FRONTEND_URL` 환경 변수를 실제 Vercel 도메인으로 업데이트:
+     ```
+     FRONTEND_URL=https://[실제 Vercel 도메인].vercel.app
+     ```
+
+2. **음성인식 API CORS 설정**:
+   - Render 대시보드 → `mrdinner-voice-api` 서비스 → "Environment" 탭
+   - `VOICE_ORDER_CLIENT_ORIGIN` 환경 변수를 실제 Vercel 도메인으로 업데이트:
+     ```
+     VOICE_ORDER_CLIENT_ORIGIN=https://[실제 Vercel 도메인].vercel.app,http://localhost:3000
+     ```
+
+3. 서비스 재배포 (자동으로 재배포되거나 수동으로 재배포)
+
+### 5단계: 데이터베이스 초기화
+
+배포 후 첫 실행 시 `DataInitializer`가 자동으로 초기 데이터를 생성합니다. 만약 수동으로 초기화해야 한다면:
+
+1. PlanetScale 대시보드에서 SQL 콘솔 열기
+2. `backend/sql/reset_menu_data.sql` 파일의 내용 실행 (있는 경우)
+3. 또는 백엔드 애플리케이션을 재시작하여 자동 초기화
+
+### 배포 후 확인 사항
+
+- [ ] 프론트엔드가 정상적으로 로드되는지 확인
+- [ ] 백엔드 API가 정상적으로 응답하는지 확인 (`/api/menus` 엔드포인트 테스트)
+- [ ] 음성인식 API가 정상적으로 응답하는지 확인 (`/health` 엔드포인트 테스트)
+- [ ] CORS 오류가 없는지 확인 (브라우저 개발자 도구 콘솔 확인)
+- [ ] 로그인이 정상적으로 작동하는지 확인
+- [ ] 데이터베이스 연결이 정상인지 확인 (주문 생성 등 테스트)
+- [ ] 음성인식 기능이 정상적으로 작동하는지 확인 (메뉴 목록 페이지에서 음성 주문 테스트)
+
+### 주의사항
+
+1. **Render 무료 티어 제한**:
+   - 15분간 요청이 없으면 서비스가 sleep 상태로 전환됩니다
+   - 첫 요청 시 깨어나는데 약 30초~1분 정도 소요될 수 있습니다
+   - 프로덕션 환경에서는 유료 플랜을 고려하세요
+
+2. **PlanetScale 무료 티어 제한**:
+   - 데이터베이스 크기 제한 (약 5GB)
+   - 연결 수 제한
+   - 자세한 내용은 PlanetScale 문서를 참조하세요
+
+3. **환경 변수 보안**:
+   - 민감한 정보(비밀번호, JWT 시크릿)는 절대 코드에 커밋하지 마세요
+   - `.env` 파일은 `.gitignore`에 추가되어 있어야 합니다
+
+### 문제 해결
+
+**백엔드가 시작되지 않는 경우**:
+- Render 로그 확인
+- 환경 변수가 올바르게 설정되었는지 확인
+- 데이터베이스 연결 정보 확인
+
+**CORS 오류가 발생하는 경우**:
+- `FRONTEND_URL` 환경 변수가 정확한지 확인
+- 프론트엔드 URL에 프로토콜(`https://`)이 포함되어 있는지 확인
+
+**데이터베이스 연결 오류**:
+- PlanetScale 연결 정보 확인
+- SSL 설정 확인 (PlanetScale은 SSL 필수)
+- 방화벽 설정 확인
+
+**음성인식 API 오류**:
+- OpenAI API 키가 올바르게 설정되었는지 확인
+- `VOICE_ORDER_CLIENT_ORIGIN` 환경 변수가 프론트엔드 URL을 포함하는지 확인
+- Render 로그에서 Python 의존성 설치 오류 확인
+
 ## 라이선스
 
 이 프로젝트는 교육 목적으로 제작되었습니다.

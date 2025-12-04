@@ -3,7 +3,7 @@ import { ChatRequest, ChatResponse, ChatMessage, OrderConfirmRequest, OrderConfi
 
 // FastAPI 서비스는 별도의 baseURL 사용
 const voiceApiClient: AxiosInstance = axios.create({
-  baseURL: 'http://localhost:5001',
+  baseURL: import.meta.env.VITE_VOICE_API_URL || 'http://localhost:5001',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -50,6 +50,14 @@ export const voiceOrderApi = {
       finalMessage,
     } as OrderConfirmRequest)
     return response.data
+  },
+
+  // 초기 인사 메시지 가져오기
+  getGreeting: async (lang: string = 'ko-KR', name: string = '고객님'): Promise<string> => {
+    const response = await voiceApiClient.get('/config/greeting', {
+      params: { lang, name },
+    })
+    return response.data.greeting || '안녕하세요!'
   },
 }
 

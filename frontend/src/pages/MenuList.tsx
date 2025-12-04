@@ -2,13 +2,12 @@ import { useEffect, useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMenuStore } from '../store/menuStore'
 import { useCartStore } from '../store/cartStore'
-import { useOrderStore } from '../store/orderStore'
 import { useAuthStore } from '../store/authStore'
 import { MenuType, ChatMessage, VoiceOrderSummary, DeliveryType, CustomerCoupon } from '../types'
 import { voiceOrderApi } from '../api/voiceOrder'
 import { customerApi } from '../api/customer'
 import { 
-  convertOrderSummaryToCartItemRequest,
+  convertOrderSummaryToCartItemRequests,
   parseDeliveryType,
   parseReservationTime,
   findCouponByCodeOrName
@@ -19,7 +18,6 @@ import ErrorMessage from '../components/ErrorMessage'
 const MenuList = () => {
   const { menus, loading, error, fetchMenus } = useMenuStore()
   const { addItem, clearCart } = useCartStore()
-  const { createOrder, applyCoupon } = useOrderStore()
   const { isAuthenticated } = useAuthStore()
   const navigate = useNavigate()
 
@@ -34,22 +32,98 @@ const MenuList = () => {
   const [textInput, setTextInput] = useState('')
   const [availableCoupons, setAvailableCoupons] = useState<CustomerCoupon[]>([])
   const [isServerConnected, setIsServerConnected] = useState<boolean | null>(null)
+  const [customerName, setCustomerName] = useState<string>('')
+  const [hasInitialGreeting, setHasInitialGreeting] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const speechSynthesisRef = useRef<SpeechSynthesis | null>(null)
 
   useEffect(() => {
     fetchMenus()
   }, [fetchMenus])
 
-  // 음성인식 모드 진입 시 쿠폰 목록 조회 및 서버 연결 확인
+  // 음성인식 모드 진입 시 전체 초기화 (서버 연결, 쿠폰, 프로필, 인사)
   useEffect(() => {
     if (isVoiceMode && isAuthenticated) {
-      fetchAvailableCoupons()
-      checkServerConnection()
+      const initializeVoiceMode = async () => {
+        try {
+          console.log('🎤 음성인식 모드 초기화 시작')
+          
+          // 1. 서버 연결 확인
+          const isConnected = await checkServerConnection()
+          console.log('서버 연결 상태:', isConnected)
+
+          // 2. 쿠폰 목록 조회
+          fetchAvailableCoupons()
+          
+          // 3. 고객 프로필 조회
+          let name = '고객님'
+          try {
+            const profileResponse = await customerApi.getProfile()
+            if (profileResponse.success && profileResponse.data) {
+              name = profileResponse.data.name || '고객님'
+              console.log('고객 이름:', name)
+            }
+          } catch (err: any) {
+            console.error('고객 프로필 조회 실패:', err)
+            // 프로필 조회 실패해도 기본 이름으로 진행
+          }
+          
+          setCustomerName(name)
+          
+          // 4. 초기 인사 메시지 설정 (음성인식 모드 진입 시마다 인사)
+          if (isConnected) {
+            // 서버 연결 성공 시 FastAPI에서 인사 가져오기
+            console.log('FastAPI에서 인사 메시지 가져오기 시도')
+            await initializeGreeting(name)
+          } else {
+            // 서버 연결 실패 시 기본 인사 메시지
+            console.log('서버 미연결, 기본 인사 메시지 사용')
+            const defaultGreeting = `안녕하세요, ${name} 고객님. 원하시는 디너 주문을 말씀해 주세요.`
+            const greetingMessage: ChatMessage = { role: 'assistant', content: defaultGreeting }
+            setConversationHistory([greetingMessage])
+            setHasInitialGreeting(true)
+            setTimeout(() => {
+              speakText(defaultGreeting)
+            }, 300)
+          }
+        } catch (err: any) {
+          console.error('음성인식 모드 초기화 실패:', err)
+          // 에러 발생 시에도 기본 인사 메시지 표시
+          const defaultGreeting = `안녕하세요, 고객님. 원하시는 디너 주문을 말씀해 주세요.`
+          const greetingMessage: ChatMessage = { role: 'assistant', content: defaultGreeting }
+          setConversationHistory([greetingMessage])
+          setHasInitialGreeting(true)
+          setTimeout(() => {
+            speakText(defaultGreeting)
+          }, 300)
+        }
+      }
+      
+      initializeVoiceMode()
     }
   }, [isVoiceMode, isAuthenticated])
+
+  // 고객 프로필 조회
+  const fetchCustomerProfile = async () => {
+    try {
+      const response = await customerApi.getProfile()
+      if (response.success && response.data) {
+        const name = response.data.name || '고객님'
+        setCustomerName(name)
+        return name
+      } else {
+        setCustomerName('고객님')
+        return '고객님'
+      }
+    } catch (err: any) {
+      console.error('고객 프로필 조회 실패:', err)
+      setCustomerName('고객님')
+      return '고객님'
+    }
+  }
 
   // FastAPI 서버 연결 확인
   const checkServerConnection = async () => {
@@ -57,9 +131,11 @@ const MenuList = () => {
       await voiceOrderApi.checkHealth()
       setIsServerConnected(true)
       setVoiceError('')
+      return true
     } catch (err: any) {
       setIsServerConnected(false)
       setVoiceError('FastAPI 서버에 연결할 수 없습니다. 서버를 실행해주세요.')
+      return false
     }
   }
 
@@ -72,8 +148,14 @@ const MenuList = () => {
       setRecognizedText('')
       setVoiceError('')
       setStatusMessage('')
+      setHasInitialGreeting(false)
+      // TTS 중지
+      if (speechSynthesisRef.current) {
+        speechSynthesisRef.current.cancel()
+      }
     }
   }, [isVoiceMode])
+
 
   // 고객 쿠폰 목록 조회
   const fetchAvailableCoupons = async () => {
@@ -86,6 +168,68 @@ const MenuList = () => {
     } catch (err: any) {
       console.error('쿠폰 목록 조회 실패:', err)
     }
+  }
+
+  // 초기 인사 메시지 설정
+  const initializeGreeting = async (name: string) => {
+    console.log('초기 인사 메시지 생성 중...')
+    
+    try {
+      const greeting = await voiceOrderApi.getGreeting('ko-KR', name)
+      console.log('인사 메시지 받음:', greeting)
+      const greetingMessage: ChatMessage = { role: 'assistant', content: greeting }
+      setConversationHistory([greetingMessage])
+      setHasInitialGreeting(true)
+      
+      // TTS로 인사 재생 (약간의 지연 후)
+      setTimeout(() => {
+        speakText(greeting)
+      }, 300)
+    } catch (err: any) {
+      console.error('초기 인사 메시지 가져오기 실패:', err)
+      // 실패 시 기본 인사 메시지 사용
+      const defaultGreeting = `안녕하세요, ${name} 고객님. 원하시는 디너 주문을 말씀해 주세요.`
+      console.log('기본 인사 메시지 사용:', defaultGreeting)
+      const greetingMessage: ChatMessage = { role: 'assistant', content: defaultGreeting }
+      setConversationHistory([greetingMessage])
+      setHasInitialGreeting(true)
+      
+      setTimeout(() => {
+        speakText(defaultGreeting)
+      }, 300)
+    }
+  }
+
+  // TTS: 텍스트를 음성으로 변환
+  const speakText = (text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      console.warn('브라우저가 TTS를 지원하지 않습니다.')
+      return
+    }
+
+    // 이전 음성 중지
+    if (speechSynthesisRef.current) {
+      speechSynthesisRef.current.cancel()
+    }
+
+    speechSynthesisRef.current = window.speechSynthesis
+
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'ko-KR'
+    utterance.rate = 0.9
+    utterance.pitch = 1.0
+    utterance.volume = 1.0
+
+    utterance.onend = () => {
+      speechSynthesisRef.current = null
+    }
+
+    utterance.onerror = (error) => {
+      console.error('TTS 오류:', error)
+      speechSynthesisRef.current = null
+    }
+
+    speechSynthesisRef.current.speak(utterance)
   }
 
   const getMenuName = (type: MenuType) => {
@@ -239,6 +383,9 @@ const MenuList = () => {
       const assistantMessage: ChatMessage = { role: 'assistant', content: response.message }
       setConversationHistory([...updatedHistory, assistantMessage])
 
+      // TTS로 AI 응답 재생
+      speakText(response.message)
+
       // 주문 확정 감지
       if (response.orderConfirmed && response.order) {
         setOrderSummary(response.order)
@@ -273,30 +420,28 @@ const MenuList = () => {
         return
       }
 
-      // 1. 배달 타입 결정
-      const deliveryType = parseDeliveryType(summary.deliveryTime)
-      const reservationTime = deliveryType === DeliveryType.RESERVATION 
-        ? parseReservationTime(summary.deliveryTime)
-        : undefined
-
-      // 2. 쿠폰 정보 처리
-      let matchedCoupon: CustomerCoupon | null = null
-      if (summary.useCoupon === true && summary.couponCode) {
-        // 쿠폰 목록이 아직 로드되지 않았으면 조회
-        if (availableCoupons.length === 0) {
-          await fetchAvailableCoupons()
-        }
-        matchedCoupon = findCouponByCodeOrName(summary.couponCode, availableCoupons)
-        if (!matchedCoupon) {
-          console.warn(`쿠폰을 찾을 수 없습니다: ${summary.couponCode}`)
-          // 쿠폰을 찾지 못해도 주문은 진행
-        }
+      // 0. 고객 이름이 없으면 설정
+      if (!summary.customerName && customerName) {
+        summary.customerName = customerName
       }
 
-      // 3. OrderSummary를 AddCartItemRequest로 변환
-      const cartItemRequest = convertOrderSummaryToCartItemRequest(summary, menus)
+      // 배달 타입과 쿠폰 정보는 장바구니에서 주문할 때 사용할 수 있도록 주석 처리
+      // const deliveryType = parseDeliveryType(summary.deliveryTime)
+      // const reservationTime = deliveryType === DeliveryType.RESERVATION 
+      //   ? parseReservationTime(summary.deliveryTime)
+      //   : undefined
+      // let matchedCoupon: CustomerCoupon | null = null
+      // if (summary.useCoupon === true && summary.couponCode) {
+      //   if (availableCoupons.length === 0) {
+      //     await fetchAvailableCoupons()
+      //   }
+      //   matchedCoupon = findCouponByCodeOrName(summary.couponCode, availableCoupons)
+      // }
+
+      // OrderSummary를 AddCartItemRequest 배열로 변환 (여러 메뉴 지원)
+      const cartItemRequests = convertOrderSummaryToCartItemRequests(summary, menus)
       
-      if (!cartItemRequest) {
+      if (cartItemRequests.length === 0) {
         setVoiceError('주문 정보 변환에 실패했습니다.')
         setIsProcessing(false)
         setStatusMessage('')
@@ -312,33 +457,35 @@ const MenuList = () => {
         console.error('장바구니 초기화 실패:', err)
       }
 
-      // 5. 장바구니에 추가
-      await addItem(cartItemRequest)
-
-      setStatusMessage('주문을 생성하는 중...')
-
-      // 6. 주문 생성 (배달 타입, 예약 시간 반영)
-      const order = await createOrder({
-        deliveryType,
-        reservationTime,
-      })
-
-      // 7. 쿠폰 적용 (매칭된 쿠폰이 있는 경우)
-      if (matchedCoupon) {
-        setStatusMessage('쿠폰을 적용하는 중...')
+      // 5. 여러 메뉴를 각각 장바구니에 추가
+      const errors: string[] = []
+      for (let i = 0; i < cartItemRequests.length; i++) {
         try {
-          await applyCoupon(order.orderId, undefined, matchedCoupon.id)
-        } catch (couponError: any) {
-          console.error('쿠폰 적용 실패:', couponError)
-          // 쿠폰 적용 실패해도 주문은 생성되었으므로 계속 진행
+          await addItem(cartItemRequests[i])
+        } catch (err: any) {
+          console.error(`메뉴 ${i + 1} 추가 실패:`, err)
+          errors.push(`메뉴 ${i + 1}: ${err.message || '추가 실패'}`)
         }
       }
 
-      setStatusMessage('주문이 완료되었습니다!')
+      if (errors.length > 0) {
+        if (errors.length === cartItemRequests.length) {
+          // 모든 메뉴 추가 실패
+          setVoiceError('모든 메뉴 추가에 실패했습니다: ' + errors.join(', '))
+          setIsProcessing(false)
+          setStatusMessage('')
+          return
+        } else {
+          // 일부 메뉴만 실패
+          setVoiceError(`일부 메뉴 추가에 실패했습니다: ${errors.join(', ')}`)
+        }
+      }
 
-      // 8. 주문 내역 페이지로 이동
+      setStatusMessage(`${cartItemRequests.length}개의 메뉴가 장바구니에 추가되었습니다!`)
+
+      // 6. 장바구니 페이지로 이동
       setTimeout(() => {
-        navigate(`/orders/${order.orderId}`)
+        navigate('/cart')
       }, 1000)
     } catch (err: any) {
       console.error('주문 처리 실패:', err)

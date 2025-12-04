@@ -3,9 +3,9 @@ spring:
     name: mrdinner-backend
 
   datasource:
-    url: jdbc:mysql://localhost:3306/mrdinner?useSSL=false&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
-    username: root
-    password: jisung727
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/mrdinner?useSSL=false&serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:jisung727}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -28,7 +28,7 @@ spring:
     time-zone: Asia/Seoul
 
 server:
-  port: 8080
+  port: ${PORT:8080}
   servlet:
     context-path: /api
     encoding:
@@ -37,11 +37,12 @@ server:
       force: true
 
 jwt:
-  secret: mrdinnerSecretKeyForJWTTokenGenerationAndValidation2024
-  expiration: 86400000 # 24 hours in milliseconds
+  secret: ${JWT_SECRET:mrdinnerSecretKeyForJWTTokenGenerationAndValidation2024}
+  expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
 
 logging:
   level:
-    com.mrdinner: DEBUG
-    org.springframework.security: DEBUG
+    com.mrdinner: ${LOG_LEVEL:DEBUG}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:DEBUG}
+    root: ${ROOT_LOG_LEVEL:INFO}
 

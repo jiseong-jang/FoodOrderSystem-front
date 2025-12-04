@@ -1,41 +1,59 @@
 @echo off
-echo FastAPI 음성 주문 서버 환경 설정 중...
+chcp 65001 >nul 2>&1
+echo ========================================
+echo Setting up FastAPI Voice Order Server...
+echo ========================================
 echo.
 
-REM 가상환경 생성
-echo 가상환경 생성 중...
+REM Check if Python is available
+where python >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Cannot find Python.
+    echo.
+    echo Please check if Python is installed.
+    echo Download Python: https://www.python.org/downloads/
+    echo.
+    pause
+    exit /b 1
+)
+
+REM Create virtual environment
+echo Creating virtual environment...
 python -m venv .venv
 if errorlevel 1 (
-    echo 오류: 가상환경 생성 실패. Python이 설치되어 있는지 확인하세요.
+    echo ERROR: Failed to create virtual environment.
+    echo Please check if Python is installed correctly.
     pause
     exit /b 1
 )
 
-REM 가상환경 활성화
-echo 가상환경 활성화 중...
+REM Activate virtual environment
+echo Activating virtual environment...
 call .venv\Scripts\activate.bat
 if errorlevel 1 (
-    echo 오류: 가상환경 활성화 실패
+    echo ERROR: Failed to activate virtual environment
     pause
     exit /b 1
 )
 
-REM 패키지 설치
-echo 패키지 설치 중...
+REM Install packages
+echo Installing packages...
 pip install -r requirements.txt
 if errorlevel 1 (
-    echo 오류: 패키지 설치 실패
+    echo ERROR: Failed to install packages
     pause
     exit /b 1
 )
 
 echo.
-echo 설정이 완료되었습니다!
+echo ========================================
+echo Setup completed successfully!
+echo ========================================
 echo.
-echo 서버를 시작하려면 다음 명령어를 실행하세요:
+echo To start the server, run:
 echo   start.bat
 echo.
-echo 또는 직접 실행:
+echo Or manually:
 echo   call .venv\Scripts\activate.bat
 echo   uvicorn app.main:app --reload --host 0.0.0.0 --port 5001
 echo.

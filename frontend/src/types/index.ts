@@ -219,7 +219,15 @@ export interface ChatResponse {
   order?: VoiceOrderSummary
 }
 
+export interface VoiceOrderItem {
+  menuName: string
+  menuStyle?: string | null
+  menuItems?: string | null
+  quantity: number
+}
+
 export interface VoiceOrderSummary {
+  // 기존 필드 (하위 호환성)
   customerName?: string | null
   customerAddress?: string | null
   menuName?: string | null
@@ -231,6 +239,8 @@ export interface VoiceOrderSummary {
   quantity?: number | null
   couponCode?: string | null
   useCoupon?: boolean | null
+  // 새로운 필드 - 여러 메뉴 주문 지원
+  orderItems?: VoiceOrderItem[]
 }
 
 export interface OrderConfirmRequest {

@@ -1,65 +1,71 @@
 @echo off
-echo FastAPI 음성 주문 서버 시작 중...
+chcp 65001 >nul 2>&1
+echo ========================================
+echo Starting FastAPI Voice Order Server...
+echo ========================================
 echo.
 
-REM Python 명령어 찾기
+REM Check if Python is available
 where python >nul 2>&1
 if errorlevel 1 (
-    echo 오류: Python을 찾을 수 없습니다.
+    echo ERROR: Cannot find Python.
     echo.
-    echo Python이 설치되어 있는지 확인하세요.
-    echo Python 설치: https://www.python.org/downloads/
+    echo Please check if Python is installed.
+    echo Download Python: https://www.python.org/downloads/
     echo.
     pause
     exit /b 1
 )
 
-REM Python 버전 확인
+REM Check Python version
 python --version
 if errorlevel 1 (
-    echo 오류: Python 버전 확인 실패
+    echo ERROR: Failed to check Python version
     pause
     exit /b 1
 )
 
-REM 가상환경이 없으면 생성
+REM Create virtual environment if it doesn't exist
 if not exist ".venv" (
-    echo 가상환경 생성 중...
+    echo Creating virtual environment...
     python -m venv .venv
     if errorlevel 1 (
         echo.
-        echo 오류: 가상환경 생성 실패
-        echo Python이 올바르게 설치되어 있는지 확인하세요.
+        echo ERROR: Failed to create virtual environment
+        echo Please check if Python is installed correctly.
         echo.
         pause
         exit /b 1
     )
-    echo 가상환경 생성 완료!
+    echo Virtual environment created successfully!
 )
 
-REM 가상환경 활성화
-echo 가상환경 활성화 중...
+REM Activate virtual environment
+echo Activating virtual environment...
 call .venv\Scripts\activate.bat
 if errorlevel 1 (
-    echo 오류: 가상환경 활성화 실패
+    echo ERROR: Failed to activate virtual environment
     pause
     exit /b 1
 )
 
-REM 필요한 패키지 설치
-echo 패키지 설치 확인 중...
+REM Install required packages
+echo Checking and installing packages...
 pip install -q -r requirements.txt
 if errorlevel 1 (
-    echo 오류: 패키지 설치 실패
+    echo ERROR: Failed to install packages
     pause
     exit /b 1
 )
 
-REM 서버 실행
+REM Start server
 echo.
-echo 서버 시작 중... (포트 5001)
-echo 브라우저에서 http://localhost:5001 을 열어주세요.
-echo 종료하려면 Ctrl+C를 누르세요.
+echo ========================================
+echo Starting server... (Port 5001)
+echo ========================================
+echo.
+echo Open http://localhost:5001 in your browser.
+echo Press Ctrl+C to stop the server.
 echo.
 uvicorn app.main:app --reload --host 0.0.0.0 --port 5001
 

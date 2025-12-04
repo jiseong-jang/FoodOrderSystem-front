@@ -1,4 +1,4 @@
-import { VoiceOrderSummary, AddCartItemRequest, MenuType, StyleType, DeliveryType, CustomerCoupon } from '../types'
+import { VoiceOrderSummary, VoiceOrderItem, AddCartItemRequest, MenuType, StyleType, DeliveryType, CustomerCoupon } from '../types'
 
 /**
  * 음성인식 주문 결과(OrderSummary)를 AddCartItemRequest로 변환하는 유틸리티
@@ -101,22 +101,22 @@ export function findMenuIdByType(
 }
 
 /**
- * OrderSummary를 AddCartItemRequest로 변환
+ * 단일 OrderItem을 AddCartItemRequest로 변환 (내부 헬퍼 함수)
  */
-export function convertOrderSummaryToCartItemRequest(
-  summary: VoiceOrderSummary,
+function convertOrderItemToCartItemRequest(
+  item: VoiceOrderItem,
   menus: Array<{ id: number; type: MenuType }>
 ): AddCartItemRequest | null {
   // 필수 필드 확인
-  if (!summary.menuName) {
+  if (!item.menuName) {
     console.error('메뉴 이름이 없습니다.')
     return null
   }
   
   // MenuType 찾기
-  const menuType = getMenuTypeFromName(summary.menuName)
+  const menuType = getMenuTypeFromName(item.menuName)
   if (!menuType) {
-    console.error(`알 수 없는 메뉴 이름: ${summary.menuName}`)
+    console.error(`알 수 없는 메뉴 이름: ${item.menuName}`)
     return null
   }
   
@@ -128,13 +128,13 @@ export function convertOrderSummaryToCartItemRequest(
   }
   
   // StyleType 찾기
-  const styleType = getStyleTypeFromName(summary.menuStyle)
+  const styleType = getStyleTypeFromName(item.menuStyle)
   
   // 구성 음식 파싱
-  const customizedQuantities = parseMenuItems(summary.menuItems)
+  const customizedQuantities = parseMenuItems(item.menuItems)
   
   // 수량 처리
-  const quantity = summary.quantity && summary.quantity > 0 ? summary.quantity : 1
+  const quantity = item.quantity && item.quantity > 0 ? item.quantity : 1
 
   return {
     menuId,
@@ -142,6 +142,55 @@ export function convertOrderSummaryToCartItemRequest(
     customizedQuantities: Object.keys(customizedQuantities).length > 0 ? customizedQuantities : undefined,
     quantity,
   }
+}
+
+/**
+ * OrderSummary를 AddCartItemRequest 배열로 변환 (여러 메뉴 지원)
+ */
+export function convertOrderSummaryToCartItemRequests(
+  summary: VoiceOrderSummary,
+  menus: Array<{ id: number; type: MenuType }>
+): AddCartItemRequest[] {
+  const requests: AddCartItemRequest[] = []
+  
+  // orderItems 배열이 있으면 사용 (새로운 방식)
+  if (summary.orderItems && summary.orderItems.length > 0) {
+    for (const item of summary.orderItems) {
+      const request = convertOrderItemToCartItemRequest(item, menus)
+      if (request) {
+        requests.push(request)
+      } else {
+        console.warn(`주문 항목 변환 실패: ${item.menuName}`)
+      }
+    }
+  }
+  // 하위 호환성: 기존 단일 필드 사용
+  else if (summary.menuName) {
+    const singleItem: VoiceOrderItem = {
+      menuName: summary.menuName,
+      menuStyle: summary.menuStyle,
+      menuItems: summary.menuItems,
+      quantity: summary.quantity && summary.quantity > 0 ? summary.quantity : 1
+    }
+    const request = convertOrderItemToCartItemRequest(singleItem, menus)
+    if (request) {
+      requests.push(request)
+    }
+  }
+  
+  return requests
+}
+
+/**
+ * @deprecated convertOrderSummaryToCartItemRequests를 사용하세요
+ * OrderSummary를 AddCartItemRequest로 변환 (단일 메뉴만 지원)
+ */
+export function convertOrderSummaryToCartItemRequest(
+  summary: VoiceOrderSummary,
+  menus: Array<{ id: number; type: MenuType }>
+): AddCartItemRequest | null {
+  const requests = convertOrderSummaryToCartItemRequests(summary, menus)
+  return requests.length > 0 ? requests[0] : null
 }
 
 /**

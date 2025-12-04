@@ -1,0 +1,66 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Java / Maven
+backend/target/
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
+backend/.classpath
+backend/.project
+backend/.settings/
+*.class
+
+# Python
+voice-order-fastapi/.venv/
+voice-order-fastapi/__pycache__/
+voice-order-fastapi/**/__pycache__/
+voice-order-fastapi/**/*.pyc
+voice-order-fastapi/**/*.pyo
+voice-order-fastapi/**/*.pyd
+voice-order-fastapi/.Python
+voice-order-fastapi/*.so
+voice-order-fastapi/*.egg
+voice-order-fastapi/*.egg-info/
+voice-order-fastapi/dist/
+voice-order-fastapi/build/
+
+# Node.js
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/coverage/
+frontend/.nyc_output/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Test files
+*.test.json
+voice-order-fastapi/app/data/orders/*.json
+
+# Temporary files
+*.tmp
+*.temp
+dummy
+dummy2
+dummy3
+
