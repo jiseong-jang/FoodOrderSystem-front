@@ -37,7 +37,6 @@ const MenuHoverTooltip = ({ menuName, menu }: { menuName: string; menu: Menu }) 
         const spanRect = spanRef.current.getBoundingClientRect()
         const tooltipRect = tooltipRef.current.getBoundingClientRect()
         const viewportWidth = window.innerWidth
-        const viewportHeight = window.innerHeight
         
         const tooltipWidth = tooltipRect.width || 350
         const tooltipHeight = tooltipRect.height || 300
@@ -1052,44 +1051,7 @@ const MenuList = () => {
                     return null
                   }
                   
-                  // 메뉴 정보 찾기 함수
-                  const findMenuInfo = (content: string): Menu | null => {
-                    const menuNameToTypeMap: Record<string, MenuType> = {
-                      '발렌타인 디너': MenuType.VALENTINE,
-                      '발렌타인': MenuType.VALENTINE,
-                      '프렌치 디너': MenuType.FRENCH,
-                      '프렌치': MenuType.FRENCH,
-                      '잉글리시 디너': MenuType.ENGLISH,
-                      '잉글리시': MenuType.ENGLISH,
-                      '잉글리쉬 디너': MenuType.ENGLISH,
-                      '잉글리쉬': MenuType.ENGLISH,
-                      '샴페인 축제 디너': MenuType.CHAMPAGNE_FESTIVAL,
-                      '샴페인 축제': MenuType.CHAMPAGNE_FESTIVAL,
-                      '샴페인': MenuType.CHAMPAGNE_FESTIVAL,
-                    }
-                    
-                    for (const [menuName, menuType] of Object.entries(menuNameToTypeMap)) {
-                      if (content.includes(menuName)) {
-                        const menu = menus.find(m => m.type === menuType)
-                        return menu || null
-                      }
-                    }
-                    return null
-                  }
-                  
-                  // 메뉴 설명 매핑
-                  const getMenuDescription = (menuType: MenuType): string => {
-                    const descriptions: Record<MenuType, string> = {
-                      [MenuType.VALENTINE]: '작은 하트 모양과 큐피드가 장식된 접시 1개, 와인 1병, 스테이크 1개',
-                      [MenuType.FRENCH]: '커피 1잔, 와인 1잔, 샐러드 1개, 스테이크 1개',
-                      [MenuType.ENGLISH]: '에그 스크램블 1개, 베이컨 1개, 빵 1개, 스테이크 1개',
-                      [MenuType.CHAMPAGNE_FESTIVAL]: '샴페인 1병, 바게트빵 4개, 커피 포트 1개, 와인 1병, 스테이크 2개',
-                    }
-                    return descriptions[menuType] || ''
-                  }
-                  
                   const menuImage = msg.role === 'assistant' ? getMenuImage(msg.content) : null
-                  const menuInfo = msg.role === 'assistant' ? findMenuInfo(msg.content) : null
                   
                   // 텍스트에서 메뉴 이름을 찾아서 hover 가능한 요소로 변환
                   const renderTextWithMenuHover = (text: string) => {

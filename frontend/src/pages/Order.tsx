@@ -4,7 +4,7 @@ import { useOrderStore } from '../store/orderStore'
 import { useCartStore } from '../store/cartStore'
 import { DeliveryType, CustomerCoupon } from '../types'
 import { customerApi } from '../api/customer'
-import { parseDeliveryType, parseReservationTime } from '../utils/voiceOrderConverter'
+import { parseDeliveryType } from '../utils/voiceOrderConverter'
 import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
 
