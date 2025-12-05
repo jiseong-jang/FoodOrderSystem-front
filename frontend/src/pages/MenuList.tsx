@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMenuStore } from '../store/menuStore'
 import { useCartStore } from '../store/cartStore'
@@ -7,7 +8,9 @@ import { MenuType, ChatMessage, VoiceOrderSummary, CustomerCoupon, Menu } from '
 import { voiceOrderApi } from '../api/voiceOrder'
 import { customerApi } from '../api/customer'
 import { 
-  convertOrderSummaryToCartItemRequests
+  convertOrderSummaryToCartItemRequests,
+  extractDeliveryTimeFromHistory,
+  extractMenuInfoFromHistory
 } from '../utils/voiceOrderConverter'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
@@ -88,7 +91,7 @@ const MenuHoverTooltip = ({ menuName, menu }: { menuName: string; menu: Menu }) 
       >
         {menuName}
       </span>
-      {isHovered && (
+      {isHovered && createPortal(
         <div
           ref={tooltipRef}
           style={{
@@ -184,7 +187,8 @@ const MenuHoverTooltip = ({ menuName, menu }: { menuName: string; menu: Menu }) 
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   )
@@ -200,6 +204,8 @@ const MenuList = () => {
   const [isListening, setIsListening] = useState(false)
   const [recognizedText, setRecognizedText] = useState('')
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([])
+  const conversationEndRef = useRef<HTMLDivElement>(null)
+  const conversationContainerRef = useRef<HTMLDivElement>(null)
   const [orderSummary, setOrderSummary] = useState<VoiceOrderSummary | null>(null)
   const [voiceError, setVoiceError] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
@@ -218,6 +224,19 @@ const MenuList = () => {
   useEffect(() => {
     fetchMenus()
   }, [fetchMenus])
+
+  // 대화 히스토리가 변경될 때마다 스크롤을 맨 아래로
+  useEffect(() => {
+    if (conversationEndRef.current && conversationContainerRef.current) {
+      // 약간의 지연을 두어 DOM 업데이트 후 스크롤
+      setTimeout(() => {
+        conversationContainerRef.current?.scrollTo({
+          top: conversationContainerRef.current.scrollHeight,
+          behavior: 'smooth'
+        })
+      }, 100)
+    }
+  }, [conversationHistory])
 
   // 음성인식 모드 진입 시 전체 초기화 (서버 연결, 쿠폰, 프로필, 인사)
   useEffect(() => {
@@ -545,6 +564,35 @@ const MenuList = () => {
 
       // 주문 확정 감지
       if (response.orderConfirmed && response.order) {
+        // 배달 날짜/시간을 rule-based로 추출하여 order에 추가
+        const extractedDeliveryTime = extractDeliveryTimeFromHistory([...updatedHistory, assistantMessage])
+        if (extractedDeliveryTime && !response.order.deliveryTime) {
+          response.order.deliveryTime = extractedDeliveryTime
+          console.log('[주문 처리] 대화에서 배달 시간 추출:', extractedDeliveryTime)
+        }
+        
+        // 메뉴 정보가 없으면 대화 히스토리에서 추출 (fallback)
+        if ((!response.order.orderItems || response.order.orderItems.length === 0) && !response.order.menuName) {
+          const extractedMenus = extractMenuInfoFromHistory([...updatedHistory, assistantMessage])
+          if (extractedMenus && extractedMenus.length > 0) {
+            console.log('[주문 처리] 대화에서 메뉴 정보 추출:', extractedMenus)
+            // 단일 메뉴인 경우
+            if (extractedMenus.length === 1) {
+              response.order.menuName = extractedMenus[0].menuName
+              response.order.menuStyle = extractedMenus[0].menuStyle || null
+              response.order.quantity = extractedMenus[0].quantity
+            } else {
+              // 여러 메뉴인 경우
+              response.order.orderItems = extractedMenus.map(menu => ({
+                menuName: menu.menuName,
+                menuStyle: menu.menuStyle || null,
+                menuItems: null,
+                quantity: menu.quantity
+              }))
+            }
+          }
+        }
+        
         setOrderSummary(response.order)
         setStatusMessage('주문이 확정되었습니다. 처리 중...')
         await handleOrderConfirmed(response.order, [...updatedHistory, assistantMessage])
@@ -560,7 +608,18 @@ const MenuList = () => {
         errorMessage = 'FastAPI 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요. (http://localhost:5001)'
       } else if (err.response?.status === 500) {
         errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+      } else if (err.response?.status === 502) {
+        errorMessage = 'LLM 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.'
+      } else if (err.response?.status === 504) {
+        errorMessage = '서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.'
       }
+      
+      // 에러 메시지를 대화 히스토리에 추가하여 사용자에게 알림
+      const errorSystemMessage: ChatMessage = {
+        role: 'assistant',
+        content: `⚠️ ${errorMessage}\n\n대화를 계속하려면 다시 시도해주세요.`
+      }
+      setConversationHistory(prev => [...prev, errorSystemMessage])
       
       setVoiceError(errorMessage)
       setIsProcessing(false)
@@ -582,16 +641,51 @@ const MenuList = () => {
         summary.customerName = customerName
       }
 
+      // 1. 배달 날짜/시간을 rule-based로 추출 (대화 히스토리에서)
+      let deliveryTime = summary.deliveryTime
+      if (!deliveryTime && _finalHistory) {
+        deliveryTime = extractDeliveryTimeFromHistory(_finalHistory) || null
+        if (deliveryTime) {
+          summary.deliveryTime = deliveryTime
+          console.log('[주문 처리] 대화 히스토리에서 배달 시간 추출:', deliveryTime)
+        }
+      }
+
       // 배달 타입과 예약 시간을 sessionStorage에 저장하여 주문 페이지에서 자동 설정
-      if (summary.deliveryTime) {
-        sessionStorage.setItem('voiceOrderDeliveryTime', summary.deliveryTime)
+      if (deliveryTime) {
+        sessionStorage.setItem('voiceOrderDeliveryTime', deliveryTime)
       }
 
       // OrderSummary를 AddCartItemRequest 배열로 변환 (여러 메뉴 지원)
+      console.log('[주문 처리] 주문 요약:', summary)
+      console.log('[주문 처리] 메뉴 목록:', menus)
+      
       const cartItemRequests = convertOrderSummaryToCartItemRequests(summary, menus)
       
       if (cartItemRequests.length === 0) {
-        setVoiceError('주문 정보 변환에 실패했습니다.')
+        // 더 자세한 에러 메시지 생성
+        let errorMessage = '주문 정보 변환에 실패했습니다.\n'
+        
+        if (summary.orderItems && summary.orderItems.length > 0) {
+          const failedItems = summary.orderItems
+            .map(item => item.menuName || '이름 없음')
+            .join(', ')
+          errorMessage += `주문 항목: ${failedItems}\n`
+        } else if (summary.menuName) {
+          errorMessage += `주문 메뉴: ${summary.menuName}\n`
+        } else {
+          errorMessage += '주문 정보가 비어있습니다.\n'
+        }
+        
+        errorMessage += '콘솔을 확인하여 자세한 오류 정보를 확인하세요.'
+        
+        console.error('[주문 처리] 변환 실패 상세:', {
+          summary,
+          menus,
+          cartItemRequests
+        })
+        
+        setVoiceError(errorMessage)
         setIsProcessing(false)
         setStatusMessage('')
         return
@@ -995,16 +1089,19 @@ const MenuList = () => {
           </div>
 
           {/* 대화 히스토리 - 채팅 형식 */}
-          <div style={{
-            background: 'white',
-            borderRadius: '0.75rem',
-            padding: '1.5rem',
-            marginBottom: '1.5rem',
-            border: '2px solid #e2e8f0',
-            maxHeight: '400px',
-            overflowY: 'auto',
-            minHeight: '200px'
-          }}>
+          <div 
+            ref={conversationContainerRef}
+            style={{
+              background: 'white',
+              borderRadius: '0.75rem',
+              padding: '1.5rem',
+              marginBottom: '1.5rem',
+              border: '2px solid #e2e8f0',
+              maxHeight: '400px',
+              overflowY: 'auto',
+              minHeight: '200px'
+            }}
+          >
             <p style={{
               margin: '0 0 1rem 0',
               fontSize: '1rem',
@@ -1055,18 +1152,12 @@ const MenuList = () => {
                   
                   // 텍스트에서 메뉴 이름을 찾아서 hover 가능한 요소로 변환
                   const renderTextWithMenuHover = (text: string) => {
+                    // 정확한 메뉴 이름 4개만 매칭 (부분 매칭 제거)
                     const menuNamePatterns = [
                       { name: '발렌타인 디너', type: MenuType.VALENTINE },
-                      { name: '발렌타인', type: MenuType.VALENTINE },
                       { name: '프렌치 디너', type: MenuType.FRENCH },
-                      { name: '프렌치', type: MenuType.FRENCH },
                       { name: '잉글리시 디너', type: MenuType.ENGLISH },
-                      { name: '잉글리시', type: MenuType.ENGLISH },
-                      { name: '잉글리쉬 디너', type: MenuType.ENGLISH },
-                      { name: '잉글리쉬', type: MenuType.ENGLISH },
                       { name: '샴페인 축제 디너', type: MenuType.CHAMPAGNE_FESTIVAL },
-                      { name: '샴페인 축제', type: MenuType.CHAMPAGNE_FESTIVAL },
-                      { name: '샴페인', type: MenuType.CHAMPAGNE_FESTIVAL },
                     ]
                     
                     // 긴 패턴부터 먼저 매칭 (예: "프렌치 디너"가 "프렌치"보다 먼저)
@@ -1217,18 +1308,20 @@ const MenuList = () => {
                           : '0 2px 4px rgba(0, 0, 0, 0.1)',
                         wordBreak: 'break-word'
                       }}>
-                        <p style={{
+                        <div style={{
                           margin: 0,
                           fontSize: '1rem',
                           whiteSpace: 'pre-wrap',
                           lineHeight: '1.6'
                         }}>
                           {msg.role === 'assistant' ? renderTextWithMenuHover(msg.content) : msg.content}
-                        </p>
+                        </div>
                       </div>
                     </div>
                   )
                 })}
+                {/* 스크롤 위치 마커 */}
+                <div ref={conversationEndRef} />
               </div>
             )}
           </div>

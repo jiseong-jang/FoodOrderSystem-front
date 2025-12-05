@@ -668,15 +668,36 @@ const OrderDetail = () => {
                   </div>
                 ) : (
                   <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#555' }}>
-                    {/* 편집 모드가 아닐 때는 최신 customizedQuantities만 표시 */}
-                    {Object.entries(item.customizedQuantities || {})
-                      .filter(([, qty]) => typeof qty === 'number' && qty > 0)
-                      .map(([code, qty], index) => (
-                        <span key={code}>
-                          {index > 0 && ', '}
-                          {getItemLabel(code)} x {qty as number}
-                        </span>
-                      ))}
+                    {/* 편집 모드가 아닐 때는 최신 customizedQuantities 표시, 없으면 메뉴 기본 구성품 표시 */}
+                    {(() => {
+                      const quantities = item.customizedQuantities || {}
+                      const hasCustomized = Object.keys(quantities).length > 0
+                      
+                      if (hasCustomized) {
+                        // customizedQuantities가 있으면 표시
+                        return Object.entries(quantities)
+                          .filter(([, qty]) => typeof qty === 'number' && qty > 0)
+                          .map(([code, qty], index) => (
+                            <span key={code}>
+                              {index > 0 && ', '}
+                              {getItemLabel(code)} x {qty as number}
+                            </span>
+                          ))
+                      } else if (menu) {
+                        // customizedQuantities가 없으면 메뉴의 기본 구성품 표시
+                        return menu.items
+                          .filter(item => (item.defaultQuantity || 0) > 0)
+                          .map((menuItem, index) => (
+                            <span key={menuItem.code}>
+                              {index > 0 && ', '}
+                              {getItemLabel(menuItem.code)} x {menuItem.defaultQuantity || 1}
+                            </span>
+                          ))
+                      } else {
+                        // 메뉴 정보도 없으면 빈 메시지
+                        return <span style={{ color: '#94a3b8' }}>구성품 정보 없음</span>
+                      }
+                    })()}
                   </div>
                 )}
               </div>

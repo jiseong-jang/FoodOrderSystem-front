@@ -4,19 +4,34 @@ import { VoiceOrderSummary, VoiceOrderItem, AddCartItemRequest, MenuType, StyleT
  * 음성인식 주문 결과(OrderSummary)를 AddCartItemRequest로 변환하는 유틸리티
  */
 
-// 메뉴 이름 → MenuType 매핑
+// 메뉴 이름 → MenuType 매핑 (공백 유무, 대소문자 무시)
 const menuNameToTypeMap: Record<string, MenuType> = {
   '발렌타인 디너': MenuType.VALENTINE,
+  '발렌타인디너': MenuType.VALENTINE,
+  '발렌타인': MenuType.VALENTINE,
   '프렌치 디너': MenuType.FRENCH,
+  '프렌치디너': MenuType.FRENCH,
+  '프렌치': MenuType.FRENCH,
   '잉글리시 디너': MenuType.ENGLISH,
+  '잉글리시디너': MenuType.ENGLISH,
+  '잉글리시': MenuType.ENGLISH,
   '샴페인 축제 디너': MenuType.CHAMPAGNE_FESTIVAL,
+  '샴페인축제디너': MenuType.CHAMPAGNE_FESTIVAL,
+  '샴페인 축제': MenuType.CHAMPAGNE_FESTIVAL,
+  '샴페인축제': MenuType.CHAMPAGNE_FESTIVAL,
 }
 
-// 스타일 이름 → StyleType 매핑
+// 스타일 이름 → StyleType 매핑 (공백 유무, 대소문자 무시)
 const styleNameToTypeMap: Record<string, StyleType> = {
   '심플 스타일': StyleType.SIMPLE,
+  '심플스타일': StyleType.SIMPLE,
+  '심플': StyleType.SIMPLE,
   '그랜드 스타일': StyleType.GRAND,
+  '그랜드스타일': StyleType.GRAND,
+  '그랜드': StyleType.GRAND,
   '디럭스 스타일': StyleType.DELUXE,
+  '디럭스스타일': StyleType.DELUXE,
+  '디럭스': StyleType.DELUXE,
 }
 
 // 구성 음식 한글 이름 → MenuItemCode 매핑
@@ -36,23 +51,67 @@ const itemNameToCodeMap: Record<string, string> = {
 }
 
 /**
- * 메뉴 이름으로 MenuType 찾기
+ * 메뉴 이름으로 MenuType 찾기 (유연한 매칭)
  */
 export function getMenuTypeFromName(menuName: string | null | undefined): MenuType | null {
   if (!menuName) return null
   
+  // 정규화: 공백 제거, 소문자 변환
   const normalizedName = menuName.trim()
-  return menuNameToTypeMap[normalizedName] || null
+  const noSpaceName = normalizedName.replace(/\s+/g, '')
+  
+  // 정확한 매칭 시도
+  if (menuNameToTypeMap[normalizedName]) {
+    return menuNameToTypeMap[normalizedName]
+  }
+  if (menuNameToTypeMap[noSpaceName]) {
+    return menuNameToTypeMap[noSpaceName]
+  }
+  
+  // 부분 매칭 시도 (예: "발렌타인 디너 세트" -> "발렌타인")
+  for (const [key, value] of Object.entries(menuNameToTypeMap)) {
+    if (normalizedName.includes(key) || key.includes(normalizedName)) {
+      return value
+    }
+    if (noSpaceName.includes(key.replace(/\s+/g, '')) || key.replace(/\s+/g, '').includes(noSpaceName)) {
+      return value
+    }
+  }
+  
+  console.warn(`알 수 없는 메뉴 이름: "${menuName}" (정규화: "${normalizedName}", 공백제거: "${noSpaceName}")`)
+  return null
 }
 
 /**
- * 스타일 이름으로 StyleType 찾기
+ * 스타일 이름으로 StyleType 찾기 (유연한 매칭)
  */
 export function getStyleTypeFromName(styleName: string | null | undefined): StyleType {
   if (!styleName) return StyleType.SIMPLE // 기본값
   
+  // 정규화: 공백 제거
   const normalizedName = styleName.trim()
-  return styleNameToTypeMap[normalizedName] || StyleType.SIMPLE
+  const noSpaceName = normalizedName.replace(/\s+/g, '')
+  
+  // 정확한 매칭 시도
+  if (styleNameToTypeMap[normalizedName]) {
+    return styleNameToTypeMap[normalizedName]
+  }
+  if (styleNameToTypeMap[noSpaceName]) {
+    return styleNameToTypeMap[noSpaceName]
+  }
+  
+  // 부분 매칭 시도
+  for (const [key, value] of Object.entries(styleNameToTypeMap)) {
+    if (normalizedName.includes(key) || key.includes(normalizedName)) {
+      return value
+    }
+    if (noSpaceName.includes(key.replace(/\s+/g, '')) || key.replace(/\s+/g, '').includes(noSpaceName)) {
+      return value
+    }
+  }
+  
+  console.warn(`알 수 없는 스타일 이름: "${styleName}", 기본값(SIMPLE) 사용`)
+  return StyleType.SIMPLE
 }
 
 /**
@@ -107,41 +166,53 @@ function convertOrderItemToCartItemRequest(
   item: VoiceOrderItem,
   menus: Array<{ id: number; type: MenuType }>
 ): AddCartItemRequest | null {
+  console.log(`[항목 변환] 시작:`, item)
+  
   // 필수 필드 확인
   if (!item.menuName) {
-    console.error('메뉴 이름이 없습니다.')
+    console.error('[항목 변환] 메뉴 이름이 없습니다.')
     return null
   }
   
   // MenuType 찾기
   const menuType = getMenuTypeFromName(item.menuName)
   if (!menuType) {
-    console.error(`알 수 없는 메뉴 이름: ${item.menuName}`)
+    console.error(`[항목 변환] 알 수 없는 메뉴 이름: "${item.menuName}"`)
+    console.error(`[항목 변환] 사용 가능한 메뉴 타입:`, Object.values(MenuType))
     return null
   }
+  console.log(`[항목 변환] 메뉴 타입 찾음: ${menuType}`)
   
   // 메뉴 ID 찾기
   const menuId = findMenuIdByType(menuType, menus)
   if (!menuId) {
-    console.error(`메뉴 ID를 찾을 수 없습니다: ${menuType}`)
+    console.error(`[항목 변환] 메뉴 ID를 찾을 수 없습니다. 타입: ${menuType}`)
+    console.error(`[항목 변환] 사용 가능한 메뉴:`, menus.map(m => ({ id: m.id, type: m.type })))
     return null
   }
+  console.log(`[항목 변환] 메뉴 ID 찾음: ${menuId}`)
   
   // StyleType 찾기
   const styleType = getStyleTypeFromName(item.menuStyle)
+  console.log(`[항목 변환] 스타일 타입: ${styleType} (원본: "${item.menuStyle}")`)
   
   // 구성 음식 파싱
   const customizedQuantities = parseMenuItems(item.menuItems)
+  console.log(`[항목 변환] 구성 음식:`, customizedQuantities)
   
   // 수량 처리
   const quantity = item.quantity && item.quantity > 0 ? item.quantity : 1
+  console.log(`[항목 변환] 수량: ${quantity}`)
 
-  return {
+  const result = {
     menuId,
     styleType,
-    customizedQuantities: Object.keys(customizedQuantities).length > 0 ? customizedQuantities : undefined,
+    customizedQuantities: Object.keys(customizedQuantities).length > 0 ? customizedQuantities : {},
     quantity,
   }
+  
+  console.log(`[항목 변환] 완료:`, result)
+  return result
 }
 
 /**
@@ -153,19 +224,26 @@ export function convertOrderSummaryToCartItemRequests(
 ): AddCartItemRequest[] {
   const requests: AddCartItemRequest[] = []
   
+  console.log('[주문 변환] OrderSummary:', JSON.stringify(summary, null, 2))
+  console.log('[주문 변환] 사용 가능한 메뉴:', menus.map(m => ({ id: m.id, type: m.type })))
+  
   // orderItems 배열이 있으면 사용 (새로운 방식)
   if (summary.orderItems && summary.orderItems.length > 0) {
+    console.log(`[주문 변환] ${summary.orderItems.length}개의 주문 항목 처리 중...`)
     for (const item of summary.orderItems) {
+      console.log(`[주문 변환] 항목 처리 중:`, item)
       const request = convertOrderItemToCartItemRequest(item, menus)
       if (request) {
+        console.log(`[주문 변환] 항목 변환 성공:`, request)
         requests.push(request)
       } else {
-        console.warn(`주문 항목 변환 실패: ${item.menuName}`)
+        console.error(`[주문 변환] 항목 변환 실패:`, item)
       }
     }
   }
   // 하위 호환성: 기존 단일 필드 사용
   else if (summary.menuName) {
+    console.log('[주문 변환] 단일 메뉴 모드 (하위 호환성)')
     const singleItem: VoiceOrderItem = {
       menuName: summary.menuName,
       menuStyle: summary.menuStyle,
@@ -174,10 +252,16 @@ export function convertOrderSummaryToCartItemRequests(
     }
     const request = convertOrderItemToCartItemRequest(singleItem, menus)
     if (request) {
+      console.log('[주문 변환] 단일 메뉴 변환 성공:', request)
       requests.push(request)
+    } else {
+      console.error('[주문 변환] 단일 메뉴 변환 실패:', singleItem)
     }
+  } else {
+    console.error('[주문 변환] 주문 정보가 없습니다. orderItems와 menuName 모두 비어있음.')
   }
   
+  console.log(`[주문 변환] 최종 변환 결과: ${requests.length}개 항목`)
   return requests
 }
 
@@ -243,6 +327,207 @@ export function parseReservationTime(deliveryTime: string | null | undefined): s
     console.error('예약 시간 파싱 실패:', error)
     return undefined
   }
+}
+
+/**
+ * 배달 날짜/시간을 rule-based로 파싱 (2025-12-08 기준)
+ * @param text 사용자 입력 텍스트
+ * @returns ISO 8601 형식의 날짜/시간 문자열 또는 null
+ */
+export function parseDeliveryDateTime(text: string | null | undefined): string | null {
+  if (!text) return null
+  
+  const normalizedText = text.trim()
+  const assumedDate = new Date('2025-12-08T00:00:00') // 기준 날짜
+  const today = new Date(assumedDate)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const dayAfterTomorrow = new Date(today)
+  dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2)
+  
+  let targetDate: Date | null = null
+  let targetHour = 18 // 기본 시간: 오후 6시
+  let targetMinute = 0
+  
+  // 날짜 파싱
+  // "내일", "내일 오후 6시", "다음날" 등
+  if (normalizedText.includes('내일') || normalizedText.includes('다음날')) {
+    targetDate = new Date(tomorrow)
+  }
+  // "모레", "다다음날"
+  else if (normalizedText.includes('모레') || normalizedText.includes('다다음날')) {
+    targetDate = new Date(dayAfterTomorrow)
+  }
+  // "오늘"
+  else if (normalizedText.includes('오늘')) {
+    targetDate = new Date(today)
+  }
+  
+  // "12월 8일", "12/8", "12-8", "2025-12-08" 등 (날짜 패턴이 있으면 파싱)
+  if (!targetDate) {
+    const datePatterns = [
+      /(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/,
+      /(\d{4})-(\d{1,2})-(\d{1,2})/,
+      /(\d{1,2})월\s*(\d{1,2})일/,
+      /(\d{1,2})\/(\d{1,2})/,
+      /(\d{1,2})-(\d{1,2})/,
+    ]
+    
+    for (const pattern of datePatterns) {
+      const match = normalizedText.match(pattern)
+      if (match) {
+        if (match.length === 4 && match[1].length === 4) {
+          // 2025년 12월 8일 형식
+          const year = parseInt(match[1])
+          const month = parseInt(match[2]) - 1
+          const day = parseInt(match[3])
+          targetDate = new Date(year, month, day)
+        } else if (match.length === 4) {
+          // 2025-12-08 형식
+          const year = parseInt(match[1])
+          const month = parseInt(match[2]) - 1
+          const day = parseInt(match[3])
+          targetDate = new Date(year, month, day)
+        } else if (match.length === 3) {
+          // 12월 8일, 12/8, 12-8 형식 (2025년 가정)
+          const month = parseInt(match[1]) - 1
+          const day = parseInt(match[2])
+          targetDate = new Date(2025, month, day)
+        }
+        if (targetDate) break
+      }
+    }
+  }
+  
+  // 시간 파싱
+  // "오후 6시", "오후 6시 30분"
+  const pmMatch = normalizedText.match(/오후\s*(\d{1,2})시(?:\s*(\d{1,2})분)?/)
+  if (pmMatch) {
+    targetHour = parseInt(pmMatch[1]) + 12
+    if (targetHour === 24) targetHour = 12 // 오후 12시는 12시
+    if (pmMatch[2]) targetMinute = parseInt(pmMatch[2])
+  }
+  // "오전 10시"
+  else {
+    const amMatch = normalizedText.match(/오전\s*(\d{1,2})시(?:\s*(\d{1,2})분)?/)
+    if (amMatch) {
+      targetHour = parseInt(amMatch[1])
+      if (targetHour === 12) targetHour = 0 // 오전 12시는 0시
+      if (amMatch[2]) targetMinute = parseInt(amMatch[2])
+    }
+    // "18시", "18:30"
+    else {
+      const hourMatch = normalizedText.match(/(\d{1,2})시(?:\s*(\d{1,2})분)?|(\d{1,2}):(\d{1,2})/)
+      if (hourMatch) {
+        if (hourMatch[1]) {
+          targetHour = parseInt(hourMatch[1])
+          if (hourMatch[2]) targetMinute = parseInt(hourMatch[2])
+        } else if (hourMatch[3]) {
+          targetHour = parseInt(hourMatch[3])
+          if (hourMatch[4]) targetMinute = parseInt(hourMatch[4])
+        }
+      }
+    }
+  }
+  
+  if (!targetDate) return null
+  
+  // ISO 8601 형식으로 변환
+  targetDate.setHours(targetHour, targetMinute, 0, 0)
+  
+  const year = targetDate.getFullYear()
+  const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+  const day = String(targetDate.getDate()).padStart(2, '0')
+  const hours = String(targetDate.getHours()).padStart(2, '0')
+  const minutes = String(targetDate.getMinutes()).padStart(2, '0')
+  const seconds = String(targetDate.getSeconds()).padStart(2, '0')
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`
+}
+
+/**
+ * 대화 히스토리에서 배달 날짜/시간 추출 (rule-based)
+ * @param history 대화 히스토리
+ * @returns ISO 8601 형식의 날짜/시간 문자열 또는 null
+ */
+export function extractDeliveryTimeFromHistory(history: Array<{ role: string; content: string }>): string | null {
+  // 최근 메시지부터 역순으로 검색
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i]
+    if (message.role === 'user') {
+      const parsed = parseDeliveryDateTime(message.content)
+      if (parsed) return parsed
+    }
+  }
+  return null
+}
+
+/**
+ * 대화 히스토리에서 메뉴 정보 추출 (rule-based fallback)
+ * @param history 대화 히스토리
+ * @returns VoiceOrderItem 배열 또는 null
+ */
+export function extractMenuInfoFromHistory(
+  history: Array<{ role: string; content: string }>
+): Array<{ menuName: string; menuStyle?: string; quantity: number }> | null {
+  const menuNames = ['발렌타인 디너', '프렌치 디너', '잉글리시 디너', '샴페인 축제 디너']
+  const styleNames = ['심플 스타일', '그랜드 스타일', '디럭스 스타일', '심플', '그랜드', '디럭스']
+  
+  const foundMenus: Array<{ menuName: string; menuStyle?: string; quantity: number }> = []
+  const foundMenuNames = new Set<string>()
+  
+  // 전체 히스토리를 검색 (최근 메시지부터 역순)
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i]
+    const content = message.content
+    
+    // 메뉴 이름 찾기 (대소문자 무시)
+    for (const menuName of menuNames) {
+      // 정확한 메뉴 이름 매칭 (부분 매칭 방지)
+      const menuNameLower = menuName.toLowerCase()
+      const contentLower = content.toLowerCase()
+      
+      // 메뉴 이름이 포함되어 있고, 아직 찾지 않은 메뉴인 경우
+      if (contentLower.includes(menuNameLower) && !foundMenuNames.has(menuName)) {
+        // 같은 메시지에서 스타일 찾기
+        let foundStyle: string | undefined
+        for (const styleName of styleNames) {
+          if (contentLower.includes(styleName.toLowerCase())) {
+            // 가장 긴 스타일 이름 우선 (예: "심플 스타일" > "심플")
+            if (!foundStyle || styleName.length > foundStyle.length) {
+              foundStyle = styleName
+            }
+          }
+        }
+        
+        // 수량 찾기 (기본값 1)
+        // "발렌타인 디너 2개", "프렌치 디너 1세트" 등
+        const quantityPatterns = [
+          new RegExp(`${menuNameLower}\\s*(?:을|를)?\\s*(\\d+)\\s*(?:개|세트|인분|명)`, 'i'),
+          new RegExp(`(\\d+)\\s*(?:개|세트|인분|명)\\s*(?:의)?\\s*${menuNameLower}`, 'i'),
+        ]
+        
+        let quantity = 1
+        for (const pattern of quantityPatterns) {
+          const match = content.match(pattern)
+          if (match) {
+            quantity = parseInt(match[1])
+            break
+          }
+        }
+        
+        foundMenuNames.add(menuName)
+        foundMenus.push({
+          menuName,
+          menuStyle: foundStyle,
+          quantity: quantity > 0 ? quantity : 1
+        })
+      }
+    }
+  }
+  
+  console.log('[메뉴 추출] 대화 히스토리에서 찾은 메뉴:', foundMenus)
+  return foundMenus.length > 0 ? foundMenus : null
 }
 
 /**
