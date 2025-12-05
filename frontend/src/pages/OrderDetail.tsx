@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useOrderStore } from '../store/orderStore'
 import { useMenuStore } from '../store/menuStore'
-import { OrderStatus, UpdateOrderRequest, Item, Menu, OrderModificationLog } from '../types'
+import { OrderStatus, UpdateOrderRequest, Item, Menu, OrderModificationLog, StyleType, MenuType } from '../types'
 import { orderApi } from '../api/order'
 import { menuApi } from '../api/menu'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -14,6 +14,7 @@ const OrderDetail = () => {
   const {} = useMenuStore()
   const [isEditing, setIsEditing] = useState(false)
   const [editedQuantities, setEditedQuantities] = useState<Record<number, Record<string, number>>>({})
+  const [editedStyles, setEditedStyles] = useState<Record<number, StyleType>>({})
   const [updating, setUpdating] = useState(false)
   const [updateError, setUpdateError] = useState('')
   const [menuCache, setMenuCache] = useState<Record<number, Menu>>({})
@@ -74,17 +75,22 @@ const OrderDetail = () => {
     if (currentOrder && isEditing) {
       // 편집 모드 진입 시 항상 현재 최신 주문 아이템의 수량으로 완전히 초기화
       // 주문 수정 후 OrderItem ID가 바뀔 수 있으므로 매번 완전히 새로 초기화
-      const initial: Record<number, Record<string, number>> = {}
+      const initialQuantities: Record<number, Record<string, number>> = {}
+      const initialStyles: Record<number, StyleType> = {}
       // 현재 주문의 OrderItem만 사용 (최신 데이터만)
       currentOrder.orderItems.forEach(item => {
         // 항상 최신 customizedQuantities를 깊은 복사하여 초기화
-        initial[item.id] = JSON.parse(JSON.stringify(item.customizedQuantities || {}))
+        initialQuantities[item.id] = JSON.parse(JSON.stringify(item.customizedQuantities || {}))
+        // 현재 스타일로 초기화
+        initialStyles[item.id] = item.styleType
       })
       // 기존 editedQuantities 완전히 무시하고 새로 초기화
-      setEditedQuantities(initial)
+      setEditedQuantities(initialQuantities)
+      setEditedStyles(initialStyles)
     } else if (!isEditing) {
-      // 편집 모드가 아닐 때는 editedQuantities 완전히 초기화
+      // 편집 모드가 아닐 때는 editedQuantities와 editedStyles 완전히 초기화
       setEditedQuantities({})
+      setEditedStyles({})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrder?.orderId, isEditing])
@@ -131,9 +137,14 @@ const OrderDetail = () => {
   const calculateItemPrice = (item: any, menu: Menu | null) => {
     if (!menu) return item.subTotal
 
+    // 편집 모드일 때는 editedStyles 사용, 아닐 때는 item.styleType 사용
+    const currentStyleType = isEditing 
+      ? (editedStyles[item.id] || item.styleType)
+      : item.styleType
+
     let stylePrice = 0
-    if (item.styleType === 'GRAND') stylePrice = 10000
-    else if (item.styleType === 'DELUXE') stylePrice = 20000
+    if (currentStyleType === StyleType.GRAND) stylePrice = 10000
+    else if (currentStyleType === StyleType.DELUXE) stylePrice = 20000
 
     let customizationPrice = 0
     // 편집 모드일 때만 editedQuantities 사용, 아닐 때는 항상 item.customizedQuantities 사용
@@ -152,25 +163,26 @@ const OrderDetail = () => {
   const calculateTotalPrice = () => {
     if (!currentOrder || !currentOrder.orderItems || currentOrder.orderItems.length === 0) return 0
     
-    // 중복 제거: 같은 메뉴 ID와 스타일 타입의 경우 가장 최신 것(가장 큰 ID)만 계산
+    // 중복 제거: 메뉴 ID별로 가장 최신 아이템(ID가 가장 큰 것)만 계산
     // 주문 수정 후 변경 전과 변경 후가 모두 있을 수 있으므로 중복 제거 필수
-    const uniqueItemsMap = new Map<string, any>()
+    const itemsByMenuId = new Map<number, any>()
     
     currentOrder.orderItems.forEach((item) => {
-      const key = `${item.menu.id}-${item.styleType}`
-      const existing = uniqueItemsMap.get(key)
+      const menuId = item.menu.id
+      const existing = itemsByMenuId.get(menuId)
       
       if (!existing || item.id > existing.id) {
-        // 같은 메뉴와 스타일이 없거나, 더 최신 ID면 저장/교체
-        uniqueItemsMap.set(key, item)
+        // 같은 메뉴 ID가 없거나, 더 최신 ID면 저장/교체
+        itemsByMenuId.set(menuId, item)
       }
     })
     
     // Map에서 배열로 변환 (최신 것만 포함)하여 가격 계산
-    const uniqueItems = Array.from(uniqueItemsMap.values())
+    const uniqueItems = Array.from(itemsByMenuId.values())
     let total = 0
     uniqueItems.forEach(item => {
       const menu = menuCache[item.menu.id]
+      // 편집 모드일 때는 편집 중인 스타일과 수량을 사용하여 가격 계산
       total += calculateItemPrice(item, menu)
     })
     return total
@@ -209,17 +221,17 @@ const OrderDetail = () => {
     const discountAmount = currentOrder.coupon ? currentOrder.coupon.discountAmount : 0
     const editedFinalPrice = Math.max(0, editedTotalPrice - discountAmount)
     
-    // 현재 가격도 최신 메뉴 구성으로 계산 (중복 제거, 편집 전 상태)
-    // 중복 제거 후 각 항목의 subTotal만 합산
-    const uniqueItemsMap = new Map<string, any>()
+    // 편집 전 상태의 가격 계산 (중복 제거 후 각 항목의 subTotal만 합산)
+    // 메뉴 ID별로 가장 최신 아이템만 선택
+    const itemsByMenuId = new Map<number, any>()
     currentOrder.orderItems.forEach((item) => {
-      const key = `${item.menu.id}-${item.styleType}`
-      const existing = uniqueItemsMap.get(key)
+      const menuId = item.menu.id
+      const existing = itemsByMenuId.get(menuId)
       if (!existing || item.id > existing.id) {
-        uniqueItemsMap.set(key, item)
+        itemsByMenuId.set(menuId, item)
       }
     })
-    const currentTotalPrice = Array.from(uniqueItemsMap.values()).reduce((sum, item) => sum + item.subTotal, 0)
+    const currentTotalPrice = Array.from(itemsByMenuId.values()).reduce((sum, item) => sum + item.subTotal, 0)
     const currentFinalPrice = Math.max(0, currentTotalPrice - discountAmount)
     
     // 가격 차이 계산 (편집 후 최종 가격 - 현재 최종 가격)
@@ -240,9 +252,11 @@ const OrderDetail = () => {
         orderItems: currentOrder.orderItems.map(item => {
           // 편집 모드에서 수정된 수량 사용, 없으면 현재 customizedQuantities 사용
           const quantities = editedQuantities[item.id] || item.customizedQuantities || {}
+          // 편집 모드에서 수정된 스타일 사용, 없으면 현재 styleType 사용
+          const styleType = editedStyles[item.id] || item.styleType
           return {
             menuId: item.menu.id,
-            styleType: item.styleType,
+            styleType: styleType,
             customizedQuantities: quantities,
             quantity: item.quantity
           }
@@ -255,6 +269,7 @@ const OrderDetail = () => {
       // 편집 모드 즉시 종료하여 모든 편집 상태 초기화
       setIsEditing(false)
       setEditedQuantities({}) // 편집 수량 완전 초기화
+      setEditedStyles({}) // 편집 스타일 완전 초기화
       setMenuCache({}) // 메뉴 캐시 초기화
       
       // 주문 정보를 서버에서 다시 가져와서 확실하게 최신 데이터 사용
@@ -280,14 +295,32 @@ const OrderDetail = () => {
 
   const canEdit = currentOrder.status === OrderStatus.RECEIVED
   
-  // 항상 최신 수정된 메뉴 구성의 가격만 계산 (중복 제거 적용됨)
-  const currentTotalPrice = calculateTotalPrice()
-  // 쿠폰이 적용되어 있다면 할인 금액 고려
+  // 최종 가격 계산: 수정 후 아이템(ID가 가장 큰 것)만으로 계산
   const discountAmount = currentOrder.coupon ? currentOrder.coupon.discountAmount : 0
-  const currentFinalPrice = Math.max(0, currentTotalPrice - discountAmount)
+  
+  // 수정 후 아이템만 선택하여 가격 계산 (메뉴 ID별로 가장 최신 아이템만)
+  const getFinalPrice = () => {
+    if (!currentOrder || !currentOrder.orderItems || currentOrder.orderItems.length === 0) return currentOrder.finalPrice
+    
+    // 메뉴 ID별로 가장 최신 아이템(ID가 가장 큰 것)만 선택
+    const itemsByMenuId = new Map<number, any>()
+    currentOrder.orderItems.forEach((item) => {
+      const menuId = item.menu.id
+      const existing = itemsByMenuId.get(menuId)
+      if (!existing || item.id > existing.id) {
+        itemsByMenuId.set(menuId, item)
+      }
+    })
+    
+    // 수정 후 아이템들의 subTotal만 합산
+    const totalPrice = Array.from(itemsByMenuId.values()).reduce((sum, item) => sum + item.subTotal, 0)
+    return Math.max(0, totalPrice - discountAmount)
+  }
+  
+  const currentFinalPrice = getFinalPrice()
   
   // 편집 모드일 때만 편집된 가격 계산
-  const editedTotalPrice = isEditing ? calculateTotalPrice() : currentTotalPrice
+  const editedTotalPrice = isEditing ? calculateTotalPrice() : 0
   const editedFinalPrice = isEditing ? Math.max(0, editedTotalPrice - discountAmount) : currentFinalPrice
   const priceDiff = isEditing ? editedFinalPrice - currentFinalPrice : 0
 
@@ -350,30 +383,20 @@ const OrderDetail = () => {
         }}>
           최종 가격: <strong style={{ fontSize: '1.75rem' }}>{currentFinalPrice.toLocaleString()}원</strong>
         </p>
-        {isEditing && (
+        {isEditing && priceDiff !== 0 && (
           <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
-            <div style={{ marginBottom: '0.5rem' }}>
-              <p style={{ margin: '0 0 0.25rem 0' }}><strong>수정 후 상품 금액: {editedTotalPrice.toLocaleString()}원</strong></p>
-              {currentOrder.coupon && (
-                <p style={{ margin: '0 0 0.25rem 0', color: '#0369a1' }}>
-                  쿠폰 할인 ({currentOrder.coupon.code}): -{discountAmount.toLocaleString()}원
-                </p>
-              )}
-              <p style={{ margin: '0.5rem 0 0 0' }}><strong>수정 후 최종 가격: {editedFinalPrice.toLocaleString()}원</strong></p>
-            </div>
-            {priceDiff !== 0 && (
-              <p style={{ color: priceDiff > 0 ? '#dc3545' : '#28a745', marginTop: '0.5rem', marginBottom: 0 }}>
-                {priceDiff > 0 ? `추가 결제: +${priceDiff.toLocaleString()}원` : `환불: ${priceDiff.toLocaleString()}원`}
-              </p>
-            )}
+            <p style={{ color: priceDiff > 0 ? '#dc3545' : '#28a745', margin: 0 }}>
+              {priceDiff > 0 ? `추가 결제: +${priceDiff.toLocaleString()}원` : `환불: ${priceDiff.toLocaleString()}원`}
+            </p>
           </div>
         )}
         {canEdit && !isEditing && (
           <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
             <button
               onClick={() => {
-                // 편집 모드 진입 전 editedQuantities 완전 초기화
+                // 편집 모드 진입 전 editedQuantities와 editedStyles 완전 초기화
                 setEditedQuantities({})
+                setEditedStyles({})
                 setIsEditing(true)
               }}
               style={{ 
@@ -446,6 +469,7 @@ const OrderDetail = () => {
                 setIsEditing(false)
                 setUpdateError('')
                 setEditedQuantities({}) // 편집 취소 시 editedQuantities 완전 초기화
+                setEditedStyles({}) // 편집 취소 시 editedStyles 완전 초기화
               }}
               disabled={updating}
               style={{ padding: '0.5rem 1rem', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: updating ? 'not-allowed' : 'pointer' }}
@@ -466,24 +490,24 @@ const OrderDetail = () => {
         <h3 style={{ marginBottom: '1rem' }}>주문 메뉴 (최신)</h3>
         {/* 항상 현재 주문의 최신 아이템만 표시 - 수정 로그나 변경 전 내용 절대 표시하지 않음 */}
         {currentOrder && currentOrder.orderItems && currentOrder.orderItems.length > 0 ? (() => {
-          // 중복 제거: 같은 메뉴 ID와 스타일 타입의 경우 가장 최신 것(가장 큰 ID)만 사용
-          // 주문 수정 후 변경 전과 변경 후가 모두 있을 수 있으므로 중복 제거 필수
-          const uniqueItemsMap = new Map<string, any>()
+          // 중복 제거: 주문 수정 시 새 아이템이 생성되므로 ID가 가장 큰 것이 최신
+          // 메뉴 ID별로 가장 최신 아이템(ID가 가장 큰 것)만 표시
+          const itemsByMenuId = new Map<number, any>()
           
           currentOrder.orderItems.forEach((item) => {
-            const key = `${item.menu.id}-${item.styleType}`
-            const existing = uniqueItemsMap.get(key)
+            const menuId = item.menu.id
+            const existing = itemsByMenuId.get(menuId)
             
             if (!existing || item.id > existing.id) {
-              // 같은 메뉴와 스타일이 없거나, 더 최신 ID면 저장/교체
-              uniqueItemsMap.set(key, item)
+              // 같은 메뉴 ID가 없거나, 더 최신 ID면 저장/교체
+              itemsByMenuId.set(menuId, item)
             }
           })
           
-          // Map에서 배열로 변환 (최신 것만 포함)
-          const uniqueItems = Array.from(uniqueItemsMap.values())
+          // Map에서 배열로 변환 (각 메뉴별로 가장 최신 것만 포함)
+          const finalItems = Array.from(itemsByMenuId.values()).sort((a, b) => b.id - a.id)
           
-          return uniqueItems.map((item, index) => {
+          return finalItems.map((item, index) => {
             const menu = menuCache[item.menu.id]
             
             // 편집 모드일 때만 editedQuantities 사용, 아닐 때는 항상 최신 item.customizedQuantities 사용
@@ -491,7 +515,11 @@ const OrderDetail = () => {
             const quantities = isEditing 
               ? (editedQuantities[item.id] || item.customizedQuantities || {}) 
               : (item.customizedQuantities || {})
-            const itemPrice = isEditing ? calculateItemPrice(item, menu) : item.subTotal
+            
+            // 편집 모드가 아닐 때는 서버에서 받은 subTotal을 직접 사용 (중복 계산 방지)
+            const itemPrice = isEditing 
+              ? calculateItemPrice(item, menu) 
+              : item.subTotal
 
             return (
               <div key={`order-item-${currentOrder.orderId}-${item.id}-${index}`} style={{ 
@@ -505,7 +533,7 @@ const OrderDetail = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                 <div>
                   <p style={{ marginBottom: '0.5rem', fontSize: '1.125rem' }}>
-                    <strong>{getMenuName(item.menu.type)}</strong> - {item.styleType}
+                    <strong>{getMenuName(item.menu.type)}</strong> - {isEditing ? (editedStyles[item.id] || item.styleType) : item.styleType}
                   </p>
                   <p style={{ margin: 0, color: '#64748b', fontSize: '0.95rem' }}>수량: {item.quantity}</p>
                 </div>
@@ -520,6 +548,98 @@ const OrderDetail = () => {
                   </p>
                 </div>
               </div>
+              {isEditing && menu && (
+                <div style={{ marginBottom: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: '600', color: '#1e293b' }}>스타일 선택</h4>
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem',
+                      padding: '0.75rem 1rem',
+                      border: `2px solid ${(editedStyles[item.id] || item.styleType) === StyleType.SIMPLE ? '#667eea' : '#e2e8f0'}`,
+                      borderRadius: '0.5rem',
+                      background: (editedStyles[item.id] || item.styleType) === StyleType.SIMPLE ? 'rgba(102, 126, 234, 0.1)' : 'white',
+                      cursor: menu.type === MenuType.CHAMPAGNE_FESTIVAL ? 'not-allowed' : 'pointer',
+                      opacity: menu.type === MenuType.CHAMPAGNE_FESTIVAL ? 0.5 : 1,
+                      transition: 'all 0.25s ease',
+                      fontWeight: '500',
+                      fontSize: '0.9rem'
+                    }}>
+                      <input
+                        type="radio"
+                        name={`style-${item.id}`}
+                        value={StyleType.SIMPLE}
+                        checked={(editedStyles[item.id] || item.styleType) === StyleType.SIMPLE}
+                        onChange={(e) => setEditedStyles(prev => ({ ...prev, [item.id]: e.target.value as StyleType }))}
+                        disabled={menu.type === MenuType.CHAMPAGNE_FESTIVAL}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      심플 (+0원)
+                    </label>
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem',
+                      padding: '0.75rem 1rem',
+                      border: `2px solid ${(editedStyles[item.id] || item.styleType) === StyleType.GRAND ? '#667eea' : '#e2e8f0'}`,
+                      borderRadius: '0.5rem',
+                      background: (editedStyles[item.id] || item.styleType) === StyleType.GRAND ? 'rgba(102, 126, 234, 0.1)' : 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.25s ease',
+                      fontWeight: '500',
+                      fontSize: '0.9rem'
+                    }}>
+                      <input
+                        type="radio"
+                        name={`style-${item.id}`}
+                        value={StyleType.GRAND}
+                        checked={(editedStyles[item.id] || item.styleType) === StyleType.GRAND}
+                        onChange={(e) => setEditedStyles(prev => ({ ...prev, [item.id]: e.target.value as StyleType }))}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      그랜드 (+10,000원)
+                    </label>
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem',
+                      padding: '0.75rem 1rem',
+                      border: `2px solid ${(editedStyles[item.id] || item.styleType) === StyleType.DELUXE ? '#667eea' : '#e2e8f0'}`,
+                      borderRadius: '0.5rem',
+                      background: (editedStyles[item.id] || item.styleType) === StyleType.DELUXE ? 'rgba(102, 126, 234, 0.1)' : 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.25s ease',
+                      fontWeight: '500',
+                      fontSize: '0.9rem'
+                    }}>
+                      <input
+                        type="radio"
+                        name={`style-${item.id}`}
+                        value={StyleType.DELUXE}
+                        checked={(editedStyles[item.id] || item.styleType) === StyleType.DELUXE}
+                        onChange={(e) => setEditedStyles(prev => ({ ...prev, [item.id]: e.target.value as StyleType }))}
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      디럭스 (+20,000원)
+                    </label>
+                  </div>
+                  {menu.type === MenuType.CHAMPAGNE_FESTIVAL && (editedStyles[item.id] || item.styleType) === StyleType.SIMPLE && (
+                    <p style={{ 
+                      color: '#ef4444', 
+                      fontSize: '0.85rem',
+                      marginTop: '0.5rem',
+                      padding: '0.5rem',
+                      background: '#fef2f2',
+                      borderRadius: '0.375rem',
+                      border: '1px solid #fecaca',
+                      fontWeight: '500'
+                    }}>
+                      샴페인 축제 디너는 그랜드 또는 디럭스 스타일만 선택 가능합니다
+                    </p>
+                  )}
+                </div>
+              )}
               <div style={{ marginTop: '0.5rem' }}>
                 <strong>구성 음식:</strong>
                 {isEditing && menu ? (
@@ -636,17 +756,21 @@ const OrderDetail = () => {
                           
                           // 매칭하여 표시
                           return uniqueNewItems.map((newItem: any, idx: number) => {
-                            // 변경 후 항목과 매칭되는 변경 전 항목 찾기
-                            const key = `${newItem.menuId}-${newItem.styleType}`
+                            // 변경 후 항목과 매칭되는 변경 전 항목 찾기 (메뉴 ID만으로 매칭하여 스타일 변경도 감지)
                             const prevItem = uniquePreviousItems.find((p: any) => {
-                              const prevKey = `${p.menuId || p.menu?.id}-${p.styleType}`
-                              return prevKey === key
+                              const prevMenuId = p.menuId || p.menu?.id
+                              return prevMenuId === newItem.menuId
                             }) || uniquePreviousItems[idx]
                             
                             if (!prevItem) return null
                             
                             const prevQuantities = prevItem.customizedQuantities || {}
                             const newQuantities = newItem.customizedQuantities || {}
+                            const prevStyleType = prevItem.styleType || prevItem.styleType
+                            const newStyleType = newItem.styleType
+                            
+                            // 스타일 변경 확인
+                            const styleChanged = prevStyleType !== newStyleType
                             
                             // 모든 구성 음식 코드 수집 (변경 전/후 모두)
                             const allCodes = new Set([
@@ -677,7 +801,12 @@ const OrderDetail = () => {
                                 color: '#1e293b',
                                 fontSize: '0.95rem'
                               }}>
-                                {getMenuName(prevItem.menuType)} - {prevItem.styleType}
+                                {getMenuName(prevItem.menuType || prevItem.menu?.type)}
+                                {styleChanged && (
+                                  <span style={{ marginLeft: '0.5rem', color: '#0369a1' }}>
+                                    (스타일 변경: {prevStyleType} → {newStyleType})
+                                  </span>
+                                )}
                               </div>
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.875rem' }}>
                                 <div>
@@ -719,7 +848,7 @@ const OrderDetail = () => {
                                   )}
                                 </div>
                               </div>
-                              {changedItems.length > 0 && (
+                              {(styleChanged || changedItems.length > 0) && (
                                 <div style={{ 
                                   marginTop: '1rem', 
                                   padding: '0.75rem',
@@ -727,29 +856,43 @@ const OrderDetail = () => {
                                   borderRadius: '0.5rem',
                                   border: '1px solid #bae6fd'
                                 }}>
-                                  <div style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#0369a1', fontSize: '0.875rem' }}>
-                                    구성 음식 수량 변경:
-                                  </div>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.875rem' }}>
-                                    {changedItems.map(({ code, prev, new: newQty }) => (
-                                      <div key={code} style={{ color: '#1e293b' }}>
-                                        <span style={{ fontWeight: '600' }}>{getItemLabel(code)}</span>:{' '}
-                                        <span style={{ color: prev < newQty ? '#dc3545' : '#28a745' }}>
-                                          {prev}개 → {newQty}개
-                                        </span>
-                                        {prev < newQty && (
-                                          <span style={{ color: '#dc3545', marginLeft: '0.5rem' }}>
-                                            (+{newQty - prev}개)
-                                          </span>
-                                        )}
-                                        {prev > newQty && (
-                                          <span style={{ color: '#28a745', marginLeft: '0.5rem' }}>
-                                            ({newQty - prev}개)
-                                          </span>
-                                        )}
+                                  {styleChanged && (
+                                    <div style={{ marginBottom: changedItems.length > 0 ? '0.75rem' : '0', paddingBottom: changedItems.length > 0 ? '0.75rem' : '0', borderBottom: changedItems.length > 0 ? '1px solid #bae6fd' : 'none' }}>
+                                      <div style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#0369a1', fontSize: '0.875rem' }}>
+                                        스타일 변경:
                                       </div>
-                                    ))}
-                                  </div>
+                                      <div style={{ fontSize: '0.875rem', color: '#1e293b' }}>
+                                        <span style={{ fontWeight: '600' }}>{prevStyleType}</span> → <span style={{ fontWeight: '600', color: '#0369a1' }}>{newStyleType}</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {changedItems.length > 0 && (
+                                    <>
+                                      <div style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#0369a1', fontSize: '0.875rem' }}>
+                                        구성 음식 수량 변경:
+                                      </div>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.875rem' }}>
+                                        {changedItems.map(({ code, prev, new: newQty }) => (
+                                          <div key={code} style={{ color: '#1e293b' }}>
+                                            <span style={{ fontWeight: '600' }}>{getItemLabel(code)}</span>:{' '}
+                                            <span style={{ color: prev < newQty ? '#dc3545' : '#28a745' }}>
+                                              {prev}개 → {newQty}개
+                                            </span>
+                                            {prev < newQty && (
+                                              <span style={{ color: '#dc3545', marginLeft: '0.5rem' }}>
+                                                (+{newQty - prev}개)
+                                              </span>
+                                            )}
+                                            {prev > newQty && (
+                                              <span style={{ color: '#28a745', marginLeft: '0.5rem' }}>
+                                                ({newQty - prev}개)
+                                              </span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               )}
                             </div>

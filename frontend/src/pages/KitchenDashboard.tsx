@@ -144,10 +144,29 @@ const KitchenDashboard = () => {
   }
 
   const renderOrderItems = (order: Order) => {
+    // 수정 후 아이템만 표시 (메뉴 ID별로 가장 최신 아이템만)
+    const getLatestItems = () => {
+      if (!order.orderItems || order.orderItems.length === 0) return []
+      
+      // 메뉴 ID별로 가장 최신 아이템(ID가 가장 큰 것)만 선택
+      const itemsByMenuId = new Map<number, any>()
+      order.orderItems.forEach((item) => {
+        const menuId = item.menu.id
+        const existing = itemsByMenuId.get(menuId)
+        if (!existing || item.id > existing.id) {
+          itemsByMenuId.set(menuId, item)
+        }
+      })
+      
+      return Array.from(itemsByMenuId.values()).sort((a, b) => b.id - a.id)
+    }
+    
+    const latestItems = getLatestItems()
+    
     return (
       <div style={{ marginTop: '1rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem' }}>
         <div style={{ fontWeight: '600', marginBottom: '0.75rem', color: '#1e293b' }}>주문 메뉴:</div>
-        {order.orderItems.map((item) => (
+        {latestItems.map((item) => (
           <div key={item.id} style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e2e8f0' }}>
             <div style={{ marginBottom: '0.5rem' }}>
               <strong style={{ color: '#1e293b' }}>
@@ -167,10 +186,10 @@ const KitchenDashboard = () => {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   {Object.entries(item.customizedQuantities)
-                    .filter(([, qty]) => qty > 0)
+                    .filter(([, qty]) => typeof qty === 'number' && qty > 0)
                     .map(([code, qty]) => (
                       <div key={code} style={{ fontSize: '0.875rem', color: '#1e293b' }}>
-                        • {getItemLabel(code)}: {qty}개
+                        • {getItemLabel(code)}: {qty as number}개
                       </div>
                     ))}
                 </div>
@@ -180,6 +199,26 @@ const KitchenDashboard = () => {
         ))}
       </div>
     )
+  }
+  
+  // 주문 가격 계산: 수정 후 아이템만으로 계산
+  const calculateOrderPrice = (order: Order) => {
+    if (!order.orderItems || order.orderItems.length === 0) return order.finalPrice
+    
+    // 메뉴 ID별로 가장 최신 아이템(ID가 가장 큰 것)만 선택
+    const itemsByMenuId = new Map<number, any>()
+    order.orderItems.forEach((item) => {
+      const menuId = item.menu.id
+      const existing = itemsByMenuId.get(menuId)
+      if (!existing || item.id > existing.id) {
+        itemsByMenuId.set(menuId, item)
+      }
+    })
+    
+    // 수정 후 아이템들의 subTotal만 합산
+    const totalPrice = Array.from(itemsByMenuId.values()).reduce((sum, item) => sum + item.subTotal, 0)
+    const discountAmount = order.coupon ? order.coupon.discountAmount : 0
+    return Math.max(0, totalPrice - discountAmount)
   }
 
   return (
@@ -270,7 +309,7 @@ const KitchenDashboard = () => {
                 <div key={order.orderId} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem' }}>
                   <h4>주문 #{order.orderId}</h4>
                   <p>상태: {getStatusName(order.status)}</p>
-                  <p>가격: {order.finalPrice.toLocaleString()}원</p>
+                  <p>가격: {calculateOrderPrice(order).toLocaleString()}원</p>
                   {renderOrderItems(order)}
                   <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                     {order.status === OrderStatus.RECEIVED && (
@@ -362,7 +401,7 @@ const KitchenDashboard = () => {
                       )}
                     </div>
                     <p>상태: {getStatusName(order.status)}</p>
-                    <p>가격: {order.finalPrice.toLocaleString()}원</p>
+                    <p>가격: {calculateOrderPrice(order).toLocaleString()}원</p>
                     {renderOrderItems(order)}
                     {reservationTime && (
                       <p style={{ color: '#007bff', fontWeight: 'bold' }}>
@@ -411,7 +450,7 @@ const KitchenDashboard = () => {
                 <div key={order.orderId} style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem' }}>
                   <h4>주문 #{order.orderId}</h4>
                   <p>상태: {getStatusName(order.status)}</p>
-                  <p>가격: {order.finalPrice.toLocaleString()}원</p>
+                  <p>가격: {calculateOrderPrice(order).toLocaleString()}원</p>
                   {renderOrderItems(order)}
                   <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                     {order.status === OrderStatus.COOKING && (

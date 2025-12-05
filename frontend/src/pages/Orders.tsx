@@ -215,6 +215,29 @@ const Orders = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {displayOrders.map((order) => {
             const badgeStyle = getStatusBadgeStyle(order.status)
+            
+            // 수정 후 아이템만으로 가격 계산 (메뉴 ID별로 가장 최신 아이템만)
+            const calculateOrderPrice = () => {
+              if (!order.orderItems || order.orderItems.length === 0) return order.finalPrice
+              
+              // 메뉴 ID별로 가장 최신 아이템(ID가 가장 큰 것)만 선택
+              const itemsByMenuId = new Map<number, any>()
+              order.orderItems.forEach((item) => {
+                const menuId = item.menu.id
+                const existing = itemsByMenuId.get(menuId)
+                if (!existing || item.id > existing.id) {
+                  itemsByMenuId.set(menuId, item)
+                }
+              })
+              
+              // 수정 후 아이템들의 subTotal만 합산
+              const totalPrice = Array.from(itemsByMenuId.values()).reduce((sum, item) => sum + item.subTotal, 0)
+              const discountAmount = order.coupon ? order.coupon.discountAmount : 0
+              return Math.max(0, totalPrice - discountAmount)
+            }
+            
+            const displayPrice = calculateOrderPrice()
+            
             return (
               <Link
                 key={order.orderId}
@@ -300,7 +323,7 @@ const Orders = () => {
                       backgroundClip: 'text',
                       margin: 0
                     }}>
-                      {order.finalPrice.toLocaleString()}원
+                      {displayPrice.toLocaleString()}원
                     </p>
                     <button
                       onClick={(e) => handleReorder(order, e)}
