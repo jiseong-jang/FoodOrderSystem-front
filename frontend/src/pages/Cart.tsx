@@ -163,21 +163,137 @@ const Cart = () => {
               e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
             }}
           >
-            <h3 style={{ 
-              marginBottom: '0.75rem',
-              fontSize: '1.5rem',
-              fontWeight: '700',
-              color: '#1e293b'
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+              marginBottom: '1rem',
+              paddingBottom: '1rem',
+              borderBottom: '1px solid #e2e8f0'
             }}>
-              {getMenuName(item.menu.type)} - {getStyleName(item.selectedStyle)}
-            </h3>
-            <p style={{ 
-              marginBottom: '0.5rem',
-              color: '#64748b',
-              fontSize: '1rem'
-            }}>
-              수량: <strong style={{ color: '#1e293b' }}>{item.quantity}</strong>
-            </p>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <span style={{
+                  fontSize: '0.875rem',
+                  color: '#64748b',
+                  fontWeight: '600',
+                  minWidth: '60px'
+                }}>
+                  메뉴:
+                </span>
+                <span style={{
+                  fontSize: '1.25rem',
+                  fontWeight: '700',
+                  color: '#1e293b'
+                }}>
+                  {getMenuName(item.menu.type)}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <span style={{
+                  fontSize: '0.875rem',
+                  color: '#64748b',
+                  fontWeight: '600',
+                  minWidth: '60px'
+                }}>
+                  스타일:
+                </span>
+                <span style={{
+                  fontSize: '1.1rem',
+                  fontWeight: '600',
+                  color: '#475569',
+                  padding: '0.25rem 0.75rem',
+                  background: '#f1f5f9',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  {getStyleName(item.selectedStyle)}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                <span style={{
+                  fontSize: '0.875rem',
+                  color: '#64748b',
+                  fontWeight: '600',
+                  minWidth: '60px'
+                }}>
+                  수량:
+                </span>
+                <span style={{
+                  fontSize: '1.1rem',
+                  fontWeight: '700',
+                  color: '#1e293b',
+                  padding: '0.25rem 0.75rem',
+                  background: '#fef3c7',
+                  borderRadius: '0.5rem',
+                  border: '1px solid #fde68a'
+                }}>
+                  {item.quantity}개
+                </span>
+              </div>
+            </div>
+            {item.customizedQuantities && Object.keys(item.customizedQuantities).length > 0 && (
+              <div style={{
+                marginTop: '1rem',
+                padding: '1rem',
+                background: '#f8fafc',
+                borderRadius: '0.75rem',
+                border: '1px solid #e2e8f0'
+              }}>
+                <div style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  color: '#64748b',
+                  marginBottom: '0.75rem'
+                }}>
+                  구성 음식:
+                </div>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem'
+                }}>
+                  {Object.entries(item.customizedQuantities)
+                    .filter(([, qty]) => typeof qty === 'number' && qty > 0)
+                    .map(([code, qty]) => {
+                      const menuItem = item.menu.items.find(i => i.code === code)
+                      const itemLabel = menuItem?.label || code
+                      return (
+                        <div key={code} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '0.9rem',
+                          color: '#1e293b'
+                        }}>
+                          <span style={{ fontWeight: '500' }}>{itemLabel}</span>
+                          <span style={{
+                            fontWeight: '700',
+                            color: '#667eea',
+                            padding: '0.125rem 0.5rem',
+                            background: 'white',
+                            borderRadius: '0.375rem',
+                            border: '1px solid #cbd5e1'
+                          }}>
+                            {qty as number}개
+                          </span>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
             <p style={{ 
               fontSize: '1.5rem', 
               fontWeight: 'bold',
@@ -185,7 +301,8 @@ const Cart = () => {
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
-              marginBottom: '1rem'
+              marginBottom: '1rem',
+              textAlign: 'right'
             }}>
               {item.subTotal.toLocaleString()}원
             </p>

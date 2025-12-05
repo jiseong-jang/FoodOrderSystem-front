@@ -120,6 +120,7 @@ export interface Order {
   kitchenStaffId?: string
   deliveryStaffId?: string
   coupon?: Coupon
+  customerAddress?: string
 }
 
 export interface CreateOrderRequest {

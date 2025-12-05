@@ -4,6 +4,7 @@ import { useOrderStore } from '../store/orderStore'
 import { useCartStore } from '../store/cartStore'
 import { DeliveryType, CustomerCoupon } from '../types'
 import { customerApi } from '../api/customer'
+import { parseDeliveryType, parseReservationTime } from '../utils/voiceOrderConverter'
 import ErrorMessage from '../components/ErrorMessage'
 import LoadingSpinner from '../components/LoadingSpinner'
 
@@ -21,6 +22,23 @@ const Order = () => {
   useEffect(() => {
     fetchCart()
     fetchAvailableCoupons()
+    
+    // sessionStorage에서 음성인식 주문의 배달 시간을 읽어와서 자동 설정
+    const voiceOrderDeliveryTime = sessionStorage.getItem('voiceOrderDeliveryTime')
+    if (voiceOrderDeliveryTime) {
+      const deliveryType = parseDeliveryType(voiceOrderDeliveryTime)
+      setDeliveryType(deliveryType)
+      
+      if (deliveryType === DeliveryType.RESERVATION) {
+        const reservationTime = parseReservationTimeForInput(voiceOrderDeliveryTime)
+        if (reservationTime) {
+          setReservationTime(reservationTime)
+        }
+      }
+      
+      // 사용 후 삭제
+      sessionStorage.removeItem('voiceOrderDeliveryTime')
+    }
     
     // sessionStorage에서 쿠폰 ID를 읽어와서 쿠폰 정보 조회
     const pendingCouponId = sessionStorage.getItem('pendingCustomerCouponId')
@@ -41,6 +59,32 @@ const Order = () => {
         })
     }
   }, [fetchCart])
+  
+  // datetime-local input 형식으로 변환하는 헬퍼 함수
+  const parseReservationTimeForInput = (deliveryTime: string | null | undefined): string | '' => {
+    if (!deliveryTime) {
+      return ''
+    }
+
+    try {
+      const date = new Date(deliveryTime)
+      if (isNaN(date.getTime())) {
+        return ''
+      }
+
+      // datetime-local input 형식: YYYY-MM-DDTHH:mm
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+
+      return `${year}-${month}-${day}T${hours}:${minutes}`
+    } catch (error) {
+      console.error('예약 시간 파싱 실패:', error)
+      return ''
+    }
+  }
 
   const fetchAvailableCoupons = async () => {
     try {

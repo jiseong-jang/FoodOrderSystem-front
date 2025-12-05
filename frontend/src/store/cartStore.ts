@@ -39,6 +39,48 @@ export const useCartStore = create<CartState>((set, get) => ({
   addItem: async (data: AddCartItemRequest) => {
     set({ loading: true, error: null })
     try {
+      // 장바구니 상태를 먼저 가져오기 (아직 로드되지 않았을 수 있음)
+      let currentCart = get().cart
+      if (!currentCart) {
+        await get().fetchCart()
+        currentCart = get().cart
+      }
+      
+      // 같은 메뉴, 같은 스타일, 같은 customizedQuantities인 항목 찾기
+      if (currentCart && currentCart.items.length > 0) {
+        const matchingItem = currentCart.items.find(item => {
+          // 같은 메뉴인지 확인
+          if (item.menu.id !== data.menuId) return false
+          
+          // 같은 스타일인지 확인
+          if (item.selectedStyle !== data.styleType) return false
+          
+          // 같은 customizedQuantities인지 확인
+          const itemQuantities = item.customizedQuantities || {}
+          const dataQuantities = data.customizedQuantities || {}
+          
+          // 키 개수 비교
+          const itemKeys = Object.keys(itemQuantities).sort()
+          const dataKeys = Object.keys(dataQuantities).sort()
+          if (itemKeys.length !== dataKeys.length) return false
+          
+          // 모든 키와 값이 같은지 확인
+          for (const key of itemKeys) {
+            if (itemQuantities[key] !== dataQuantities[key]) return false
+          }
+          
+          return true
+        })
+        
+        // 같은 항목이 있으면 수량만 업데이트
+        if (matchingItem) {
+          const newQuantity = matchingItem.quantity + data.quantity
+          await get().updateItem(matchingItem.id, newQuantity)
+          return
+        }
+      }
+      
+      // 같은 항목이 없으면 새로 추가 (스타일이 다르거나 다른 메뉴인 경우)
       const response = await cartApi.addItem(data)
       if (response.success) {
         await get().fetchCart()

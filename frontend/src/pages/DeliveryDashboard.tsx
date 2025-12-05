@@ -108,6 +108,19 @@ const DeliveryDashboard = () => {
               <h4>주문 #{order.orderId}</h4>
               <p>상태: {getStatusName(order.status)}</p>
               <p>가격: {order.finalPrice.toLocaleString()}원</p>
+              {order.customerAddress && (
+                <p style={{ 
+                  marginTop: '0.5rem', 
+                  padding: '0.75rem', 
+                  background: '#f8f9fa', 
+                  borderRadius: '4px',
+                  border: '1px solid #dee2e6',
+                  fontWeight: '500',
+                  color: '#495057'
+                }}>
+                  배달 주소: {order.customerAddress}
+                </p>
+              )}
               <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                 {order.status === OrderStatus.DELIVERING && !order.deliveryStaffId && (
                   <button
@@ -133,6 +146,19 @@ const DeliveryDashboard = () => {
               <h4>주문 #{order.orderId}</h4>
               <p>상태: {getStatusName(order.status)}</p>
               <p>가격: {order.finalPrice.toLocaleString()}원</p>
+              {order.customerAddress && (
+                <p style={{ 
+                  marginTop: '0.5rem', 
+                  padding: '0.75rem', 
+                  background: '#f8f9fa', 
+                  borderRadius: '4px',
+                  border: '1px solid #dee2e6',
+                  fontWeight: '500',
+                  color: '#495057'
+                }}>
+                  배달 주소: {order.customerAddress}
+                </p>
+              )}
               <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                 {order.status === OrderStatus.DELIVERING && order.deliveryStaffId && (
                   <button

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMenuStore } from '../store/menuStore'
 import { useCartStore } from '../store/cartStore'
 import { useAuthStore } from '../store/authStore'
-import { MenuType, ChatMessage, VoiceOrderSummary, CustomerCoupon } from '../types'
+import { MenuType, ChatMessage, VoiceOrderSummary, CustomerCoupon, Menu } from '../types'
 import { voiceOrderApi } from '../api/voiceOrder'
 import { customerApi } from '../api/customer'
 import { 
@@ -11,6 +11,185 @@ import {
 } from '../utils/voiceOrderConverter'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
+
+// 메뉴 hover 툴팁 컴포넌트
+const MenuHoverTooltip = ({ menuName, menu }: { menuName: string; menu: Menu }) => {
+  const [isHovered, setIsHovered] = useState(false)
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({})
+  const spanRef = useRef<HTMLSpanElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+  
+  const getMenuDescription = (menuType: MenuType): string => {
+    const descriptions: Record<MenuType, string> = {
+      [MenuType.VALENTINE]: '작은 하트 모양과 큐피드가 장식된 접시 1개, 와인 1병, 스테이크 1개',
+      [MenuType.FRENCH]: '커피 1잔, 와인 1잔, 샐러드 1개, 스테이크 1개',
+      [MenuType.ENGLISH]: '에그 스크램블 1개, 베이컨 1개, 빵 1개, 스테이크 1개',
+      [MenuType.CHAMPAGNE_FESTIVAL]: '샴페인 1병, 바게트빵 4개, 커피 포트 1개, 와인 1병, 스테이크 2개',
+    }
+    return descriptions[menuType] || ''
+  }
+  
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+    // 위치 계산을 다음 렌더링 사이클에서 수행
+    setTimeout(() => {
+      if (spanRef.current && tooltipRef.current) {
+        const spanRect = spanRef.current.getBoundingClientRect()
+        const tooltipRect = tooltipRef.current.getBoundingClientRect()
+        const viewportWidth = window.innerWidth
+        const viewportHeight = window.innerHeight
+        
+        const tooltipWidth = tooltipRect.width || 350
+        const tooltipHeight = tooltipRect.height || 300
+        
+        // 기본 위치: 텍스트 위, 중앙 정렬
+        let left = spanRect.left + spanRect.width / 2 - tooltipWidth / 2
+        let top = spanRect.top - tooltipHeight - 8
+        
+        // 화면 왼쪽 경계 체크
+        if (left < 10) {
+          left = 10
+        }
+        // 화면 오른쪽 경계 체크
+        else if (left + tooltipWidth > viewportWidth - 10) {
+          left = viewportWidth - tooltipWidth - 10
+        }
+        
+        // 화면 위쪽 경계 체크 (공간이 부족하면 아래쪽에 표시)
+        if (top < 10) {
+          top = spanRect.bottom + 8
+        }
+        
+        setTooltipStyle({
+          position: 'fixed',
+          top: `${top}px`,
+          left: `${left}px`,
+        })
+      }
+    }, 0)
+  }
+  
+  const handleMouseLeave = () => {
+    setIsHovered(false)
+  }
+  
+  return (
+    <span style={{ position: 'relative', display: 'inline-block' }}>
+      <span
+        ref={spanRef}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          textDecoration: 'underline',
+          textDecorationStyle: 'dotted',
+          cursor: 'help',
+          color: '#667eea',
+          fontWeight: '600'
+        }}
+      >
+        {menuName}
+      </span>
+      {isHovered && (
+        <div
+          ref={tooltipRef}
+          style={{
+            ...tooltipStyle,
+            background: 'white',
+            border: '2px solid #667eea',
+            borderRadius: '0.75rem',
+            padding: '1rem',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+            zIndex: 10000,
+            width: '350px',
+            maxHeight: '400px',
+            overflowY: 'auto',
+            pointerEvents: 'auto'
+          }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <h4 style={{
+            margin: '0 0 0.75rem 0',
+            fontSize: '1.25rem',
+            fontWeight: '700',
+            color: '#1e293b',
+            borderBottom: '2px solid #e2e8f0',
+            paddingBottom: '0.5rem'
+          }}>
+            {menuName}
+          </h4>
+          <p style={{
+            margin: '0 0 0.75rem 0',
+            fontSize: '0.95rem',
+            color: '#64748b',
+            lineHeight: '1.6'
+          }}>
+            {getMenuDescription(menu.type)}
+          </p>
+          <div style={{
+            marginBottom: '0.75rem',
+            padding: '0.75rem',
+            background: '#f8fafc',
+            borderRadius: '0.5rem',
+            border: '1px solid #e2e8f0'
+          }}>
+            <p style={{
+              margin: '0 0 0.5rem 0',
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              color: '#1e293b'
+            }}>
+              기본 가격: <span style={{ color: '#667eea', fontWeight: '700' }}>{menu.basePrice.toLocaleString()}원</span>
+            </p>
+          </div>
+          <div>
+            <p style={{
+              margin: '0 0 0.5rem 0',
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              color: '#1e293b'
+            }}>
+              구성 음식:
+            </p>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.375rem'
+            }}>
+              {menu.items.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.875rem',
+                    color: '#475569',
+                    padding: '0.25rem 0'
+                  }}
+                >
+                  <span>
+                    {item.label}
+                    {item.defaultQuantity && item.defaultQuantity > 1 && (
+                      <span style={{ color: '#94a3b8', marginLeft: '0.25rem' }}>
+                        x {item.defaultQuantity}
+                      </span>
+                    )}
+                  </span>
+                  {item.unitPrice > 0 && (
+                    <span style={{ fontWeight: '600', color: '#667eea' }}>
+                      {item.unitPrice.toLocaleString()}원
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </span>
+  )
+}
 
 const MenuList = () => {
   const { menus, loading, error, fetchMenus } = useMenuStore()
@@ -404,18 +583,10 @@ const MenuList = () => {
         summary.customerName = customerName
       }
 
-      // 배달 타입과 쿠폰 정보는 장바구니에서 주문할 때 사용할 수 있도록 주석 처리
-      // const deliveryType = parseDeliveryType(summary.deliveryTime)
-      // const reservationTime = deliveryType === DeliveryType.RESERVATION 
-      //   ? parseReservationTime(summary.deliveryTime)
-      //   : undefined
-      // let matchedCoupon: CustomerCoupon | null = null
-      // if (summary.useCoupon === true && summary.couponCode) {
-      //   if (availableCoupons.length === 0) {
-      //     await fetchAvailableCoupons()
-      //   }
-      //   matchedCoupon = findCouponByCodeOrName(summary.couponCode, availableCoupons)
-      // }
+      // 배달 타입과 예약 시간을 sessionStorage에 저장하여 주문 페이지에서 자동 설정
+      if (summary.deliveryTime) {
+        sessionStorage.setItem('voiceOrderDeliveryTime', summary.deliveryTime)
+      }
 
       // OrderSummary를 AddCartItemRequest 배열로 변환 (여러 메뉴 지원)
       const cartItemRequests = convertOrderSummaryToCartItemRequests(summary, menus)
@@ -462,9 +633,9 @@ const MenuList = () => {
 
       setStatusMessage(`${cartItemRequests.length}개의 메뉴가 장바구니에 추가되었습니다!`)
 
-      // 6. 장바구니 페이지로 이동
+      // 6. 최종 주문 페이지로 바로 이동 (날짜는 자동으로 설정됨)
       setTimeout(() => {
-        navigate('/cart')
+        navigate('/order')
       }, 1000)
     } catch (err: any) {
       console.error('주문 처리 실패:', err)
@@ -856,56 +1027,246 @@ const MenuList = () => {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {conversationHistory.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                      gap: '0.5rem'
-                    }}
-                  >
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      marginBottom: '0.25rem'
-                    }}>
-                      <span style={{
-                        fontSize: '0.875rem',
-                        fontWeight: '600',
-                        color: msg.role === 'user' ? '#667eea' : '#10b981'
+                {conversationHistory.map((msg, idx) => {
+                  // 메뉴 이름 감지 함수
+                  const getMenuImage = (content: string): string | null => {
+                    const menuImageMap: Record<string, string> = {
+                      '발렌타인 디너': '/menuimage/발렌타인디너.png',
+                      '발렌타인': '/menuimage/발렌타인디너.png',
+                      '프렌치 디너': '/menuimage/프렌치디너.png',
+                      '프렌치': '/menuimage/프렌치디너.png',
+                      '잉글리시 디너': '/menuimage/잉글리쉬디너.png',
+                      '잉글리시': '/menuimage/잉글리쉬디너.png',
+                      '잉글리쉬 디너': '/menuimage/잉글리쉬디너.png',
+                      '잉글리쉬': '/menuimage/잉글리쉬디너.png',
+                      '샴페인 축제 디너': '/menuimage/샴페인축제디너.png',
+                      '샴페인 축제': '/menuimage/샴페인축제디너.png',
+                      '샴페인': '/menuimage/샴페인축제디너.png',
+                    }
+                    
+                    for (const [menuName, imagePath] of Object.entries(menuImageMap)) {
+                      if (content.includes(menuName)) {
+                        return imagePath
+                      }
+                    }
+                    return null
+                  }
+                  
+                  // 메뉴 정보 찾기 함수
+                  const findMenuInfo = (content: string): Menu | null => {
+                    const menuNameToTypeMap: Record<string, MenuType> = {
+                      '발렌타인 디너': MenuType.VALENTINE,
+                      '발렌타인': MenuType.VALENTINE,
+                      '프렌치 디너': MenuType.FRENCH,
+                      '프렌치': MenuType.FRENCH,
+                      '잉글리시 디너': MenuType.ENGLISH,
+                      '잉글리시': MenuType.ENGLISH,
+                      '잉글리쉬 디너': MenuType.ENGLISH,
+                      '잉글리쉬': MenuType.ENGLISH,
+                      '샴페인 축제 디너': MenuType.CHAMPAGNE_FESTIVAL,
+                      '샴페인 축제': MenuType.CHAMPAGNE_FESTIVAL,
+                      '샴페인': MenuType.CHAMPAGNE_FESTIVAL,
+                    }
+                    
+                    for (const [menuName, menuType] of Object.entries(menuNameToTypeMap)) {
+                      if (content.includes(menuName)) {
+                        const menu = menus.find(m => m.type === menuType)
+                        return menu || null
+                      }
+                    }
+                    return null
+                  }
+                  
+                  // 메뉴 설명 매핑
+                  const getMenuDescription = (menuType: MenuType): string => {
+                    const descriptions: Record<MenuType, string> = {
+                      [MenuType.VALENTINE]: '작은 하트 모양과 큐피드가 장식된 접시 1개, 와인 1병, 스테이크 1개',
+                      [MenuType.FRENCH]: '커피 1잔, 와인 1잔, 샐러드 1개, 스테이크 1개',
+                      [MenuType.ENGLISH]: '에그 스크램블 1개, 베이컨 1개, 빵 1개, 스테이크 1개',
+                      [MenuType.CHAMPAGNE_FESTIVAL]: '샴페인 1병, 바게트빵 4개, 커피 포트 1개, 와인 1병, 스테이크 2개',
+                    }
+                    return descriptions[menuType] || ''
+                  }
+                  
+                  const menuImage = msg.role === 'assistant' ? getMenuImage(msg.content) : null
+                  const menuInfo = msg.role === 'assistant' ? findMenuInfo(msg.content) : null
+                  
+                  // 텍스트에서 메뉴 이름을 찾아서 hover 가능한 요소로 변환
+                  const renderTextWithMenuHover = (text: string) => {
+                    const menuNamePatterns = [
+                      { name: '발렌타인 디너', type: MenuType.VALENTINE },
+                      { name: '발렌타인', type: MenuType.VALENTINE },
+                      { name: '프렌치 디너', type: MenuType.FRENCH },
+                      { name: '프렌치', type: MenuType.FRENCH },
+                      { name: '잉글리시 디너', type: MenuType.ENGLISH },
+                      { name: '잉글리시', type: MenuType.ENGLISH },
+                      { name: '잉글리쉬 디너', type: MenuType.ENGLISH },
+                      { name: '잉글리쉬', type: MenuType.ENGLISH },
+                      { name: '샴페인 축제 디너', type: MenuType.CHAMPAGNE_FESTIVAL },
+                      { name: '샴페인 축제', type: MenuType.CHAMPAGNE_FESTIVAL },
+                      { name: '샴페인', type: MenuType.CHAMPAGNE_FESTIVAL },
+                    ]
+                    
+                    // 긴 패턴부터 먼저 매칭 (예: "프렌치 디너"가 "프렌치"보다 먼저)
+                    const sortedPatterns = menuNamePatterns.sort((a, b) => b.name.length - a.name.length)
+                    
+                    // 매칭된 부분을 추적하기 위한 배열
+                    interface Match {
+                      start: number
+                      end: number
+                      text: string
+                      menu: Menu | null
+                    }
+                    
+                    const matches: Match[] = []
+                    const processedIndices = new Set<number>()
+                    
+                    // 모든 패턴에 대해 매칭 찾기
+                    for (const pattern of sortedPatterns) {
+                      const regex = new RegExp(pattern.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+                      const regexMatches = [...text.matchAll(regex)]
+                      
+                      for (const match of regexMatches) {
+                        const start = match.index!
+                        const end = start + match[0].length
+                        
+                        // 이미 처리된 인덱스와 겹치지 않는지 확인
+                        let overlaps = false
+                        for (let i = start; i < end; i++) {
+                          if (processedIndices.has(i)) {
+                            overlaps = true
+                            break
+                          }
+                        }
+                        
+                        if (!overlaps) {
+                          const menu = menus.find(m => m.type === pattern.type)
+                          matches.push({
+                            start,
+                            end,
+                            text: match[0],
+                            menu: menu || null
+                          })
+                          
+                          // 처리된 인덱스 표시
+                          for (let i = start; i < end; i++) {
+                            processedIndices.add(i)
+                          }
+                        }
+                      }
+                    }
+                    
+                    // 시작 위치로 정렬
+                    matches.sort((a, b) => a.start - b.start)
+                    
+                    // 결과 배열 생성
+                    const result: (string | JSX.Element)[] = []
+                    let lastIndex = 0
+                    
+                    for (const match of matches) {
+                      // 매칭 전 텍스트 추가
+                      if (match.start > lastIndex) {
+                        result.push(text.substring(lastIndex, match.start))
+                      }
+                      
+                      // 메뉴가 있으면 hover 가능한 컴포넌트로, 없으면 일반 텍스트로
+                      if (match.menu) {
+                        result.push(
+                          <MenuHoverTooltip
+                            key={`${idx}-${match.start}`}
+                            menuName={match.text}
+                            menu={match.menu}
+                          />
+                        )
+                      } else {
+                        result.push(match.text)
+                      }
+                      
+                      lastIndex = match.end
+                    }
+                    
+                    // 남은 텍스트 추가
+                    if (lastIndex < text.length) {
+                      result.push(text.substring(lastIndex))
+                    }
+                    
+                    return result.length > 0 ? result : [text]
+                  }
+                  
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        gap: '0.5rem'
+                      }}
+                    >
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        marginBottom: '0.25rem'
                       }}>
-                        {msg.role === 'user' ? '👤 고객' : '🤖 AI 어시스턴트'}
-                      </span>
-                    </div>
-                    <div style={{
-                      maxWidth: '80%',
-                      padding: '0.875rem 1rem',
-                      borderRadius: msg.role === 'user' 
-                        ? '1rem 1rem 0.25rem 1rem' 
-                        : '1rem 1rem 1rem 0.25rem',
-                      background: msg.role === 'user'
-                        ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                        : '#f0fdf4',
-                      color: msg.role === 'user' ? 'white' : '#1e293b',
-                      boxShadow: msg.role === 'user'
-                        ? '0 2px 4px rgba(102, 126, 234, 0.2)'
-                        : '0 2px 4px rgba(0, 0, 0, 0.1)',
-                      wordBreak: 'break-word'
-                    }}>
-                      <p style={{
-                        margin: 0,
-                        fontSize: '1rem',
-                        whiteSpace: 'pre-wrap',
-                        lineHeight: '1.6'
+                        <span style={{
+                          fontSize: '0.875rem',
+                          fontWeight: '600',
+                          color: msg.role === 'user' ? '#667eea' : '#10b981'
+                        }}>
+                          {msg.role === 'user' ? '👤 고객' : '🤖 AI 어시스턴트'}
+                        </span>
+                      </div>
+                      {menuImage && (
+                        <div style={{
+                          marginBottom: '0.5rem',
+                          borderRadius: '0.75rem',
+                          overflow: 'hidden',
+                          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                          maxWidth: '300px'
+                        }}>
+                          <img 
+                            src={menuImage} 
+                            alt="메뉴 이미지"
+                            style={{
+                              width: '100%',
+                              height: 'auto',
+                              display: 'block'
+                            }}
+                            onError={(e) => {
+                              // 이미지 로드 실패 시 숨김
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div style={{
+                        maxWidth: '80%',
+                        padding: '0.875rem 1rem',
+                        borderRadius: msg.role === 'user' 
+                          ? '1rem 1rem 0.25rem 1rem' 
+                          : '1rem 1rem 1rem 0.25rem',
+                        background: msg.role === 'user'
+                          ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                          : '#f0fdf4',
+                        color: msg.role === 'user' ? 'white' : '#1e293b',
+                        boxShadow: msg.role === 'user'
+                          ? '0 2px 4px rgba(102, 126, 234, 0.2)'
+                          : '0 2px 4px rgba(0, 0, 0, 0.1)',
+                        wordBreak: 'break-word'
                       }}>
-                        {msg.content}
-                      </p>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '1rem',
+                          whiteSpace: 'pre-wrap',
+                          lineHeight: '1.6'
+                        }}>
+                          {msg.role === 'assistant' ? renderTextWithMenuHover(msg.content) : msg.content}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
